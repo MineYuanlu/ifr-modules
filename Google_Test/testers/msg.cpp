@@ -182,3 +182,47 @@ TEST(MSG, n_sub_wait_fst) {// 多订阅 以 wait_fst 分发模式测试
 TEST(MSG, n_sub_each) {// 多订阅 以 each 分发模式测试
     test_n_sub(4, ifr::Msg::DistributeType::each);
 }
+
+
+TEST(MSG, pop_for) {
+
+    std::counting_semaphore s1(0);
+    std::counting_semaphore s2(0);
+    auto t1 = std::thread([&s1, &s2]() {//publisher
+        try {
+            ifr::Msg::Publisher<std::string> pub("a");
+            s1.acquire();
+            s2.release();
+            pub.lock(true);
+            for (int i = 0; i < msg_loop; i++) {
+                SLEEP(delay);
+                const string data = "Data " + std::to_string(i);
+                log(t_pub, "Push", data);
+                pub.push(data);
+            }
+        } catch (std::runtime_error &err) {
+            log(t_pub, "Err", err.what());
+            ASSERT_TRUE(0) << t_pub << " Err " << err.what() << std::endl;
+        }
+    });
+    auto t2 = std::thread([&s1, &s2]() {
+        try {
+            ifr::Msg::Subscriber<std::string> sub("a");
+            s1.release();
+            s2.acquire();
+            while (true) {
+                const auto &data = sub.pop_for(5);
+                log(t_sub, "Pop", data);
+            }
+        } catch (ifr::Msg::MessageError_NoMsg &e) {
+            log(t_sub, "No Msg", e.what());
+        } catch (std::runtime_error &err) {
+            log(t_sub, "Err", err.what());
+            ASSERT_TRUE(0) << t_sub << " Err " << err.what() << std::endl;
+        }
+    });
+    while (!t1.joinable());
+    while (!t2.joinable());
+    t1.join();
+    t2.join();
+}

@@ -237,7 +237,7 @@ namespace ifr {
                 } else if (type == DistributeType::same) {
                     for (auto &sub: subs) sub->write_obj(obj);
                 } else {
-                    Subscriber <T> *sub = nullptr;
+                    Subscriber<T> *sub = nullptr;
                     switch (type) {
                         case DistributeType::each: {
                             sub = subs[nextIndex];
@@ -351,8 +351,8 @@ namespace ifr {
                     Publisher<T>::SUBSCRIBERS[_name].push_back(this);
                 } else {
                     Publisher<T>::SUBSCRIBERS.insert(
-                            std::pair<std::string, std::vector<Subscriber < T> *>>
-                    (_name, std::vector<Subscriber < T> * > ()));
+                            std::pair<std::string, std::vector<Subscriber<T> *>>
+                                    (_name, std::vector<Subscriber<T> *>()));
                     Publisher<T>::SUBSCRIBERS[_name].push_back(this);
                 }
                 name = _name;
@@ -379,7 +379,7 @@ namespace ifr {
              */
             T pop() {
                 std::unique_lock<std::mutex> lock(mtx);
-                WaitingWatcher <std::atomic_int> ww(waiting);
+                WaitingWatcher<std::atomic_int> ww(waiting);
                 if (!registered)
                     throw MessageError_BadUse(MODULE_MSG_SUB_OUTPUT_PREFIX "This subscriber is not registered yet");
                 else if (pub == nullptr)
@@ -404,13 +404,14 @@ namespace ifr {
              */
             T pop_for(size_t ms) {
                 std::unique_lock<std::mutex> lock(mtx);
-                WaitingWatcher <std::atomic_int> ww(waiting);
+                WaitingWatcher<std::atomic_int> ww(waiting);
                 if (!registered)
                     throw MessageError_BadUse(MODULE_MSG_SUB_OUTPUT_PREFIX "This subscriber is not registered yet");
                 else if (pub == nullptr)
                     throw MessageError_BadUse(
                             MODULE_MSG_SUB_OUTPUT_PREFIX "Channel \"" + name + "\" has no publisher!");
-                if (!cv.wait_for(lock, [this]() { return breaked || !que.empty(); })) {
+                if (!cv.wait_for(lock, std::chrono::milliseconds(ms),
+                                 [this]() { return breaked || !que.empty(); })) {
                     throw MessageError_NoMsg("Timeout");
                 }
                 if (!que.empty()) {
@@ -432,7 +433,7 @@ namespace ifr {
             template<class P>
             T pop_until(P pt) {
                 std::unique_lock<std::mutex> lock(mtx);
-                WaitingWatcher <std::atomic_int> ww(waiting);
+                WaitingWatcher<std::atomic_int> ww(waiting);
                 if (!registered)
                     throw MessageError_BadUse(MODULE_MSG_SUB_OUTPUT_PREFIX "This subscriber is not registered yet");
                 else if (pub == nullptr)
