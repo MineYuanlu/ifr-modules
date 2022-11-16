@@ -12,6 +12,7 @@
 #include "rapidjson/ostreamwrapper.h"
 #include <fstream>
 #include <utility>
+#include <vector>
 #include "set"
 #include "map"
 #include "config/config.h"
@@ -423,6 +424,27 @@ namespace ifr {
 
         /**@return 是否正在运行计划*/
         bool isRunning();
+
+        /**@return 当前状态*/
+        int getState();
+
+
+        enum msgType {
+            /**日志*/
+            LOG,
+            /**错误信息*/
+            ERR,
+            /**消息框提醒*/
+            POPUP
+        };
+        typedef std::function<void(msgType, const std::string &, const std::string &, const std::string &)> MsgOutter;
+
+        /**
+         * @brief 注册消息输出
+         * @details 用于通知输出, 一般由API等接口调用
+         * @param outter 输出方法: 消息类型 - 信息源 - 信息体
+         */
+        void registerMsgOut(const MsgOutter &outter);
 
         namespace Tools {
             /**

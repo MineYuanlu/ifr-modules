@@ -19,6 +19,7 @@ using namespace rapidjson;
 namespace ifr {
 
     namespace API {
+
         /**
          * 获取query的值
          * @param query query参数
@@ -35,9 +36,21 @@ namespace ifr {
 
         /**
          * @brief websocket广播
+         * @details 原始的信息
          * @param str 广播字符串
          */
-        void sendWS(const std::string &str);
+        void sendWsReal(const std::string &str);
+
+        /**
+         * @brief websocket广播
+         * @details 发送websocket类型信息
+         * @param wsType ws信息类型
+         * @param type 发送源类型
+         * @param subType 发送源子类型
+         * @param msg 消息内容
+         */
+        void
+        sendWs(ifr::Plans::msgType wsType, const std::string &type, const std::string &subType, const std::string &msg);
 
     };
 } // ifr
