@@ -224,7 +224,7 @@ namespace ifr {
                 if (!isStepFinish())return false;
                 waitingTasks = std::set<std::string>(runningTasks.begin(), runningTasks.end());
                 state++;
-                ifr::logger::log("[Plan]", "nextStep(): arrive state", state);
+                ifr::logger::log("Plan", "nextStep(): arrive state", state);
                 outMsg(LOG, "Plan", "nextStep()", "arrive state = " + std::to_string(state));
                 return true;
             }
@@ -260,7 +260,7 @@ namespace ifr {
              */
             void reset() {
                 std::unique_lock<std::recursive_mutex> lock(RunData::running_mtx);
-                ifr::logger::log("[Plan]", "reset(): running =", running);
+                ifr::logger::log("Plan", "reset(): running", running ? "true" : "false");
                 outMsg(LOG, "Plan", "reset()", "running = " + std::string(running ? "true" : "false"));
                 if (!running)return;
 
@@ -315,25 +315,31 @@ namespace ifr {
                                     std::unique_lock<std::recursive_mutex> lock(RunData::state_mtx);
                                     if (runID == rid && state == 4)waitingTasks.erase(tname);//可以自动释放最后一步
                                 } catch (PlanError &err) {
-                                    ifr::logger::log("[Plan]", "PlanError:", tname + ", " + err.what());
+                                    ifr::logger::log("Plan", "PlanError", tname + ", " + err.what());
                                     outMsg(POPUP, "Plan", "PlanError", tname + ": " + err.what());
                                     std::thread t(reset);
                                     while (!t.joinable());
                                     t.detach();
                                 } catch (std::exception &err) {
-                                    ifr::logger::log("[Plan]", "Error:", tname + ", " + err.what());
+                                    ifr::logger::log("Plan", "Error", tname + ", " + err.what());
                                     outMsg(POPUP, "Plan", "Error", tname + ": " + err.what());
                                 } catch (...) {
-                                    ifr::logger::log("[Plan]", "Error:", tname);
+                                    ifr::logger::log("Plan", "Error", tname);
                                     outMsg(POPUP, "Plan", "UnknownError", tname);
                                 }
-                                ifr::logger::log("[Plan]", "Exit Running:", tname);
+                                ifr::logger::log("Plan", "Exit Running", tname);
                                 outMsg(POPUP, "Plan", "Exit Running", tname);
                                 if (runID != rid)return;
                                 std::unique_lock<std::recursive_mutex> lock(RunData::state_mtx);
                                 finishingTasks.erase(tname);
                                 runningTasks.erase(tname);
                                 waitingTasks.erase(tname);
+
+
+                                std::thread t(reset);//重置
+                                while (!t.joinable());
+                                t.detach();
+
                             }, regTask, rid, tname, io, args);
                     while (!t.joinable());
                     t.detach();

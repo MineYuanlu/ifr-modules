@@ -13,6 +13,8 @@
 #include <fstream>
 #include <utility>
 #include <vector>
+#include <atomic>
+#include <thread>
 #include "set"
 #include "map"
 #include "config/config.h"

@@ -15,6 +15,7 @@
 #include <fstream>
 #include <functional>
 #include "logger/logger.hpp"
+#include "tools/tools.hpp"
 
 using namespace rapidjson;
 namespace ifr {

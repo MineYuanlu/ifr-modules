@@ -13,6 +13,7 @@
 #include "logger/logger.hpp"
 #include "plan/Plans.h"
 #include "tools/tools.hpp"
+#include <thread>
 
 using namespace rapidjson;
 

@@ -33,8 +33,7 @@ namespace ifr {
             }
         }
 
-        void
-        API::sendWs(ifr::Plans::msgType wsType, const string &type, const std::string &subType, const string &msg) {
+        void sendWs(ifr::Plans::msgType wsType, const string &type, const std::string &subType, const string &msg) {
             rapidjson::StringBuffer buf;
             rapidjson::Writer<rapidjson::StringBuffer> w(buf);
             w.StartObject();

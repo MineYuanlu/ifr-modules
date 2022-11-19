@@ -11,6 +11,8 @@
 
 namespace ifr {
     namespace logger {
+
+#define IFR_LOGGER(type, __Expr__) ifr::logger::log(type,#__Expr__,__Expr__)
         static std::mutex log_mtx;
 
         /**
