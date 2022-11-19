@@ -341,6 +341,8 @@ namespace ifr {
                                 t.detach();
 
                             }, regTask, rid, tname, io, args);
+                    ifr::logger::log("Plan", "start() - " + tname, t.get_id());
+                    outMsg(LOG, "Plan",  "start()" , tname);
                     while (!t.joinable());
                     t.detach();
                 }
