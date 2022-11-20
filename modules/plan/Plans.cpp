@@ -58,7 +58,6 @@ namespace ifr {
         }
 
         void readPlanInfo(const std::string &name) {
-#if IO_USE_JSON
             std::ifstream fin("runtime/plans/" + name + ".json");
             if (fin.is_open()) {
                 rapidjson::IStreamWrapper isw(fin);
@@ -69,22 +68,16 @@ namespace ifr {
             } else {
                 plans.insert(std::pair<std::string, PlanInfo>(name, {}));
             }
-#else
-            std::ifstream fin("runtime/plans/" + name + ".data");
-            if (fin.is_open()) {
-                plans.insert(std::pair<std::string, PlanInfo>(name, PlanInfo::read(fin)));
-                fin.close();
-            } else {
-                plans.insert(std::pair<std::string, PlanInfo>(name, {}));
-            }
-#endif
         }
 
         void writePlanInfo(const PlanInfo &info) {
             if (!info.loaded)return;
-#if IO_USE_JSON
-            std::string file = "runtime/plans/" + info.name + ".json";
-            ifr::Config::mkDir(ifr::Config::getDir(file));
+            std::filesystem::path file("runtime/plans/" + info.name + ".json");
+            file = absolute(file);
+            {
+                const auto parent = file.parent_path();
+                if (!parent.empty() && !exists(parent))std::filesystem::create_directories(parent);
+            }
             std::ofstream fout(file, std::ios_base::out | std::ios_base::trunc);
             if (fout.is_open()) {
                 rapidjson::OStreamWrapper osw(fout);
@@ -95,16 +88,6 @@ namespace ifr {
                 fout.flush();
                 fout.close();
             }
-#else
-            std::string file = "runtime/plans/" + info.name + ".data";
-            ifr::Config::mkdir(ifr::Config::getDir(file));
-            std::ofstream fout(file, std::ios_base::out | std::ios_base::trunc);
-            if (fout.is_open()) {
-                info(fout);
-                fout.flush();
-                fout.close();
-            }
-#endif
         }
 
         void registerTask(const std::string &name, const TaskDescription &description, const Task &registerTask) {
@@ -342,7 +325,7 @@ namespace ifr {
 
                             }, regTask, rid, tname, io, args);
                     ifr::logger::log("Plan", "start() - " + tname, t.get_id());
-                    outMsg(LOG, "Plan",  "start()" , tname);
+                    outMsg(LOG, "Plan", "start()", tname);
                     while (!t.joinable());
                     t.detach();
                 }

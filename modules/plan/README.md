@@ -90,22 +90,22 @@ static void registerTask() {
   //注册Task
   ifr::Plans::registerTask("video", description, [](auto io, auto args, auto state, auto cb) {
         //Task运行主体
-        Plans::Tools::waitState(state, 1);
+        Plans::Tools::waitState(state, 1);//等待状态从0变为1
 
-        Video video(args[arg_path]);
-        umt::Publisher<datas::FrameData> fdOut(io[io_src].channel);
-        Plans::Tools::finishAndWait(cb, state, 1);
-        cb(2);
-        const auto delay = SLEEP_TIME(1.0 / video.fps);  // 延时
-        while (*state < 3) {
-          SLEEP(delay);
-          cv::Mat mat;
-          video.read(mat);
-          fdOut.push({mat, video.id, 1000 * video.id / video.fps,
-                      cv::getTickCount(), datas::FrameType::BGR});
+        Video video(args[arg_path]);//创建Video
+        ifr::Msg::Publisher<datas::FrameData> fdOut(io[io_src].channel);//发布者
+        Plans::Tools::finishAndWait(cb, state, 1);//通知状态1就绪, 并等待状态变为2
+        fdOut.lock();//锁定发布者
+        cb(2);//通知状态2就绪
+        const auto delay = SLEEP_TIME(1.0 / video.fps);//延时
+        while (*state < 3) {//只要还在状态2(运行状态), 就持续循环
+            SLEEP(delay);//休眠定长
+            cv::Mat mat;
+            video.read(mat);
+            fdOut.push({mat, video.id, 1000 * video.id / video.fps, cv::getTickCount(), datas::FrameType::BGR});
         }
-        Plans::Tools::finishAndWait(cb, state, 3);
-        // auto release && cb(4)
+        Plans::Tools::finishAndWait(cb, state, 3);//通知状态3就绪, 并等待状态变为4
+        //auto release && cb(4) 自动释放相关资源, 并自动通知状态4就绪
       });
 }
 ```
