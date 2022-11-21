@@ -30,11 +30,11 @@ namespace ifr {
 
 
         namespace TimeWatcherHelper {
-            const constexpr static time_t max_cache = 1;
+            const constexpr static clock_t max_cache = 300;
 
             struct Data {
                 std::weak_ptr<TimeWatcher> tw;//
-                clock_t cache_lst;//上次缓存时间
+                clock_t cache_lst = -1;//上次缓存时间
                 std::string cache;//缓存
             };
 
@@ -57,18 +57,27 @@ namespace ifr {
                 }
             }
 
-            auto getTimeWatchList() {
+            std::string getTimeWatchList() {
                 std::unique_lock<std::mutex> lock(mtx);
 
                 rapidjson::StringBuffer buf;
                 rapidjson::Writer<rapidjson::StringBuffer> w(buf);
 
                 w.StartArray();
-                for (const auto &x: datas)w.String(x.first);
-                w.EndObject();
+                for (const auto &x: datas) {
+                    if (!x.second.tw.expired()) w.String(x.first);
+                }
+                w.EndArray();
 
                 w.Flush();
                 return buf.GetString();
+            }
+
+            void registerTimeWatcher(const shared_ptr <TimeWatcher> &tw) {
+                std::unique_lock<std::mutex> lock(mtx);
+                if (datas.count(tw->type) && !datas[tw->type].tw.expired())
+                    throw runtime_error("[TimeWatcher] " + tw->type + " has been registered");
+                datas[tw->type] = {tw};
             }
 
         }
@@ -140,13 +149,15 @@ namespace ifr {
                     {"/time/detail", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
                         auto hm = (mg_http_message *) ev_data;
                         auto type = mgx_getquery(hm->query, "type");
-                        mg_http_reply(c, 200, COMMON_JSON_HEADER,
-                                      TimeWatcherHelper::getTimeWatch(STR_MG2STD(type)).c_str());
+                        auto r = TimeWatcherHelper::getTimeWatch(STR_MG2STD(type));
+                        if (r.empty())
+                            mg_http_reply(c, 404, COMMON_TEXT_HEADER, "Not Found");
+                        else mg_http_reply(c, 200, COMMON_JSON_HEADER, r.c_str());
                     }
                     });
             http_route.push_back(
                     {"/time/list", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
-                        mg_http_reply(c, 200, COMMON_JSON_HEADER, TimeWatcherHelper::getTimeWatchList());
+                        mg_http_reply(c, 200, COMMON_JSON_HEADER, TimeWatcherHelper::getTimeWatchList().c_str());
                     }
                     });
             http_route.push_back(
@@ -307,7 +318,9 @@ namespace ifr {
         std::shared_ptr<TimeWatcher>
         registerTimePoint(const string &type, const TimeWatcher::unit_t &unit_ms, const size_t &point_amount,
                           const size_t &worker_amount) {
-            return std::make_shared<TimeWatcher>(type, unit_ms, point_amount, worker_amount);
+            auto s = std::make_shared<TimeWatcher>(type, unit_ms, point_amount, worker_amount);
+            TimeWatcherHelper::registerTimeWatcher(s);
+            return s;
         }
 
     }
