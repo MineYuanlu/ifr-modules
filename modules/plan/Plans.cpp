@@ -58,7 +58,6 @@ namespace ifr {
         }
 
         void readPlanInfo(const std::string &name) {
-#if IO_USE_JSON
             std::ifstream fin("runtime/plans/" + name + ".json");
             if (fin.is_open()) {
                 rapidjson::IStreamWrapper isw(fin);
@@ -69,22 +68,16 @@ namespace ifr {
             } else {
                 plans.insert(std::pair<std::string, PlanInfo>(name, {}));
             }
-#else
-            std::ifstream fin("runtime/plans/" + name + ".data");
-            if (fin.is_open()) {
-                plans.insert(std::pair<std::string, PlanInfo>(name, PlanInfo::read(fin)));
-                fin.close();
-            } else {
-                plans.insert(std::pair<std::string, PlanInfo>(name, {}));
-            }
-#endif
         }
 
         void writePlanInfo(const PlanInfo &info) {
             if (!info.loaded)return;
-#if IO_USE_JSON
-            std::string file = "runtime/plans/" + info.name + ".json";
-            ifr::Config::mkDir(ifr::Config::getDir(file));
+            std::filesystem::path file("runtime/plans/" + info.name + ".json");
+            file = absolute(file);
+            {
+                const auto parent = file.parent_path();
+                if (!parent.empty() && !exists(parent))std::filesystem::create_directories(parent);
+            }
             std::ofstream fout(file, std::ios_base::out | std::ios_base::trunc);
             if (fout.is_open()) {
                 rapidjson::OStreamWrapper osw(fout);
@@ -95,16 +88,6 @@ namespace ifr {
                 fout.flush();
                 fout.close();
             }
-#else
-            std::string file = "runtime/plans/" + info.name + ".data";
-            ifr::Config::mkdir(ifr::Config::getDir(file));
-            std::ofstream fout(file, std::ios_base::out | std::ios_base::trunc);
-            if (fout.is_open()) {
-                info(fout);
-                fout.flush();
-                fout.close();
-            }
-#endif
         }
 
         void registerTask(const std::string &name, const TaskDescription &description, const Task &registerTask) {
@@ -224,7 +207,7 @@ namespace ifr {
                 if (!isStepFinish())return false;
                 waitingTasks = std::set<std::string>(runningTasks.begin(), runningTasks.end());
                 state++;
-                ifr::logger::log("[Plan]", "nextStep(): arrive state", state);
+                ifr::logger::log("Plan", "nextStep(): arrive state", state);
                 outMsg(LOG, "Plan", "nextStep()", "arrive state = " + std::to_string(state));
                 return true;
             }
@@ -260,7 +243,7 @@ namespace ifr {
              */
             void reset() {
                 std::unique_lock<std::recursive_mutex> lock(RunData::running_mtx);
-                ifr::logger::log("[Plan]", "reset(): running =", running);
+                ifr::logger::log("Plan", "reset(): running", running ? "true" : "false");
                 outMsg(LOG, "Plan", "reset()", "running = " + std::string(running ? "true" : "false"));
                 if (!running)return;
 
@@ -315,26 +298,34 @@ namespace ifr {
                                     std::unique_lock<std::recursive_mutex> lock(RunData::state_mtx);
                                     if (runID == rid && state == 4)waitingTasks.erase(tname);//可以自动释放最后一步
                                 } catch (PlanError &err) {
-                                    ifr::logger::log("[Plan]", "PlanError:", tname + ", " + err.what());
+                                    ifr::logger::log("Plan", "PlanError", tname + ", " + err.what());
                                     outMsg(POPUP, "Plan", "PlanError", tname + ": " + err.what());
                                     std::thread t(reset);
                                     while (!t.joinable());
                                     t.detach();
                                 } catch (std::exception &err) {
-                                    ifr::logger::log("[Plan]", "Error:", tname + ", " + err.what());
+                                    ifr::logger::log("Plan", "Error", tname + ", " + err.what());
                                     outMsg(POPUP, "Plan", "Error", tname + ": " + err.what());
                                 } catch (...) {
-                                    ifr::logger::log("[Plan]", "Error:", tname);
+                                    ifr::logger::log("Plan", "Error", tname);
                                     outMsg(POPUP, "Plan", "UnknownError", tname);
                                 }
-                                ifr::logger::log("[Plan]", "Exit Running:", tname);
+                                ifr::logger::log("Plan", "Exit Running", tname);
                                 outMsg(POPUP, "Plan", "Exit Running", tname);
                                 if (runID != rid)return;
                                 std::unique_lock<std::recursive_mutex> lock(RunData::state_mtx);
                                 finishingTasks.erase(tname);
                                 runningTasks.erase(tname);
                                 waitingTasks.erase(tname);
+
+
+                                std::thread t(reset);//重置
+                                while (!t.joinable());
+                                t.detach();
+
                             }, regTask, rid, tname, io, args);
+                    ifr::logger::log("Plan", "start() - " + tname, t.get_id());
+                    outMsg(LOG, "Plan", "start()", tname);
                     while (!t.joinable());
                     t.detach();
                 }

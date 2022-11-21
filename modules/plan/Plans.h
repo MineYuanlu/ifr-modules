@@ -13,6 +13,9 @@
 #include <fstream>
 #include <utility>
 #include <vector>
+#include <atomic>
+#include <thread>
+#include <filesystem>
 #include "set"
 #include "map"
 #include "config/config.h"
@@ -21,7 +24,6 @@
 
 
 #define COMMON_LOOP_WAIT 500 //通用的循环等待时长 (ms) 即每到此值一次就需要尽快退出等待并判断state
-#define IO_USE_JSON true //持久化保存使用json存储
 
 namespace ifr {
 

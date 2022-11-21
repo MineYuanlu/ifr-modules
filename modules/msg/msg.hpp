@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <queue>
 #include <random>
+#include <condition_variable>
 /**
  * 数据通讯模块
  *
@@ -33,10 +34,16 @@ namespace ifr {
             explicit MessageError_BadUse(const std::string &str) : MessageError(str) {}
         };
 
-        /**无消息错误, 如：等待超时、由于某pub/sub被回收导致频道失效等*/
+        /**无消息错误: 等待超时*/
         class MessageError_NoMsg : public MessageError {
         public:
             explicit MessageError_NoMsg(const std::string &str) : MessageError(str) {}
+        };
+
+        /**破坏错误: 由于某pub/sub被回收导致频道失效等*/
+        class MessageError_Broke : public MessageError {
+        public:
+            explicit MessageError_Broke(const std::string &str) : MessageError(str) {}
         };
 
 
@@ -170,12 +177,12 @@ namespace ifr {
                     throw MessageError_BadUse(
                             MODULE_MSG_PUB_OUTPUT_PREFIX "Cannot register publisher with blank channel name");
                 std::unique_lock<std::mutex> lock2(MTX);
-                if (PUBLISHERS.contains(_name))
+                if (PUBLISHERS.count(_name))
                     throw MessageError_BadUse(
                             MODULE_MSG_PUB_OUTPUT_PREFIX "Channel \"" + _name + "\" has been used by other Publisher");
                 PUBLISHERS[_name] = this;
 
-                if (SUBSCRIBERS.contains(_name)) {
+                if (SUBSCRIBERS.count(_name)) {
                     subs = SUBSCRIBERS[_name];
                     for (const auto &item: subs)item->pub = this;
                     SUBSCRIBERS.erase(_name);
@@ -339,7 +346,7 @@ namespace ifr {
                 registered = true;
 
                 std::unique_lock<std::mutex> lock2(Publisher<T>::MTX);
-                if (Publisher<T>::PUBLISHERS.contains(_name)) {
+                if (Publisher<T>::PUBLISHERS.count(_name)) {
                     const auto _pub = Publisher<T>::PUBLISHERS[_name];
                     std::unique_lock<std::recursive_mutex> lock3(_pub->mtx);
                     if (_pub->locked)
@@ -347,7 +354,7 @@ namespace ifr {
                                 MODULE_MSG_SUB_OUTPUT_PREFIX "Channel \"" + _name + "\" locked");
                     _pub->subs.push_back(this);
                     pub = _pub;
-                } else if (Publisher<T>::SUBSCRIBERS.contains(_name)) {
+                } else if (Publisher<T>::SUBSCRIBERS.count(_name)) {
                     Publisher<T>::SUBSCRIBERS[_name].push_back(this);
                 } else {
                     Publisher<T>::SUBSCRIBERS.insert(
@@ -391,7 +398,7 @@ namespace ifr {
                     que.pop();
                     return tmp;
                 }
-                throw MessageError_NoMsg(MODULE_MSG_SUB_OUTPUT_PREFIX "Breaked");
+                throw MessageError_Broke(MODULE_MSG_SUB_OUTPUT_PREFIX "Broke");
             }
 
             /**
@@ -412,14 +419,14 @@ namespace ifr {
                             MODULE_MSG_SUB_OUTPUT_PREFIX "Channel \"" + name + "\" has no publisher!");
                 if (!cv.wait_for(lock, std::chrono::milliseconds(ms),
                                  [this]() { return breaked || !que.empty(); })) {
-                    throw MessageError_NoMsg("Timeout");
+                    throw MessageError_NoMsg(MODULE_MSG_SUB_OUTPUT_PREFIX "Timeout");
                 }
                 if (!que.empty()) {
                     auto tmp = std::move(que.front());
                     que.pop();
                     return tmp;
                 }
-                throw MessageError_NoMsg(MODULE_MSG_SUB_OUTPUT_PREFIX "Breaked");
+                throw MessageError_Broke(MODULE_MSG_SUB_OUTPUT_PREFIX "Broke");
             }
 
             /**
@@ -440,14 +447,14 @@ namespace ifr {
                     throw MessageError_BadUse(
                             MODULE_MSG_SUB_OUTPUT_PREFIX "Channel \"" + name + "\" has no publisher!");
                 if (!cv.wait_until(lock, pt, [this]() { return breaked || !que.empty(); })) {
-                    throw MessageError_NoMsg("Timeout");
+                    throw MessageError_NoMsg(MODULE_MSG_SUB_OUTPUT_PREFIX "Timeout");
                 }
                 if (!que.empty()) {
                     auto tmp = std::move(que.front());
                     que.pop();
                     return tmp;
                 }
-                throw MessageError_NoMsg(MODULE_MSG_SUB_OUTPUT_PREFIX "Breaked");
+                throw MessageError_Broke(MODULE_MSG_SUB_OUTPUT_PREFIX "Broke");
             }
 
         };
