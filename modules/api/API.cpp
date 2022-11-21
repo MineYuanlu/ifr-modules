@@ -4,10 +4,13 @@
 
 #include "API.h"
 
+#include <memory>
+#include <utility>
+
 using namespace std;
 namespace ifr {
     namespace API {
-        string url = "0.0.0.0:8000";
+        static const string url = "0.0.0.0:8000";
 #define COMMON_JSON_HEADER "Access-Control-Allow-Origin:*\nContent-Type: application/json;charset:utf-8;\n" //通用头(json)
 #define COMMON_TEXT_HEADER "Access-Control-Allow-Origin:*\nContent-Type: text/plain;charset:utf-8;\n" //通用头(text)
 #define STR_MG2STD(s) std::string((s).ptr,(s).len)
@@ -26,6 +29,51 @@ namespace ifr {
         mutex ws_mtx;//websocket 同步锁
 
 
+        namespace TimeWatcherHelper {
+            const constexpr static time_t max_cache = 1;
+
+            struct Data {
+                std::weak_ptr<TimeWatcher> tw;//
+                clock_t cache_lst;//上次缓存时间
+                std::string cache;//缓存
+            };
+
+            static std::mutex mtx;//访问锁
+            static std::map<std::string, Data> datas;
+
+            std::string getTimeWatch(const std::string &type) {
+                std::unique_lock<std::mutex> lock(mtx);
+                if (!datas.count(type))return "";
+                auto &data = datas[type];
+                if (auto sp = data.tw.lock()) {
+                    auto now = clock();
+                    if (now - data.cache_lst > max_cache) {
+                        data.cache_lst = now;
+                        return data.cache = sp->getTime();
+                    } else return data.cache;
+                } else {
+                    datas.erase(type);
+                    return "";
+                }
+            }
+
+            auto getTimeWatchList() {
+                std::unique_lock<std::mutex> lock(mtx);
+
+                rapidjson::StringBuffer buf;
+                rapidjson::Writer<rapidjson::StringBuffer> w(buf);
+
+                w.StartArray();
+                for (const auto &x: datas)w.String(x.first);
+                w.EndObject();
+
+                w.Flush();
+                return buf.GetString();
+            }
+
+        }
+
+
         void sendWsReal(const std::string &str) {
             std::unique_lock<mutex> lock(ws_mtx);
             for (const auto &client: wsClients) {
@@ -33,8 +81,7 @@ namespace ifr {
             }
         }
 
-        void
-        API::sendWs(ifr::Plans::msgType wsType, const string &type, const std::string &subType, const string &msg) {
+        void sendWs(ifr::Plans::msgType wsType, const string &type, const std::string &subType, const string &msg) {
             rapidjson::StringBuffer buf;
             rapidjson::Writer<rapidjson::StringBuffer> w(buf);
             w.StartObject();
@@ -89,6 +136,19 @@ namespace ifr {
         }
 
         void registerRoute() {
+            http_route.push_back(
+                    {"/time/detail", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
+                        auto hm = (mg_http_message *) ev_data;
+                        auto type = mgx_getquery(hm->query, "type");
+                        mg_http_reply(c, 200, COMMON_JSON_HEADER,
+                                      TimeWatcherHelper::getTimeWatch(STR_MG2STD(type)).c_str());
+                    }
+                    });
+            http_route.push_back(
+                    {"/time/list", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
+                        mg_http_reply(c, 200, COMMON_JSON_HEADER, TimeWatcherHelper::getTimeWatchList());
+                    }
+                    });
             http_route.push_back(
                     {"/task/descriptions", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
                         mg_http_reply(c, 200, COMMON_JSON_HEADER,
@@ -211,6 +271,7 @@ namespace ifr {
                 mg_mgr_init(&mgr);
                 mg_http_listen(&mgr, url.c_str(), fn, nullptr);     // Create listening connection
 
+
                 ifr::logger::log("api", "开始监听", url);
                 for (;;) mg_mgr_poll(&mgr, 1000);                   // Block forever
             }
@@ -242,6 +303,12 @@ namespace ifr {
             return mg_str("");
         }
 
+
+        std::shared_ptr<TimeWatcher>
+        registerTimePoint(const string &type, const TimeWatcher::unit_t &unit_ms, const size_t &point_amount,
+                          const size_t &worker_amount) {
+            return std::make_shared<TimeWatcher>(type, unit_ms, point_amount, worker_amount);
+        }
 
     }
 } // ifr

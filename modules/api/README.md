@@ -14,6 +14,8 @@ API模块目前主要用于Plan编辑, 请配合[前端](https://github.com/Mine
 
 默认路由在`registerRoute`中注册:
 
+- `GET` /time/detail
+- `GET` /time/list
 - `GET` /task/descriptions
 - `GET` /plan/list
 - `GET` /plan/state
