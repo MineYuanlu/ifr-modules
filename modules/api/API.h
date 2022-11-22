@@ -61,7 +61,7 @@ namespace ifr {
         /**耗时监控器*/
         class TimeWatcher {
         public:
-            typedef __int64 tick_t;
+            typedef int64_t tick_t;
             typedef double unit_t;
         private:
             tick_t *mat;//时间点矩阵 [worker][point][c1/c2]
