@@ -66,8 +66,11 @@ namespace ifr {
 
                                 try {
                                     info.serialize(data, w);
+                                } catch (std::exception &err) {
+                                    ifr::logger::err("Config", "Can not serialize file",
+                                                     path.string() + ", err: " + err.what());
                                 } catch (...) {
-                                    ifr::logger::log("Config", "Can not serialize file: " + path.string());
+                                    ifr::logger::err("Config", "Can not serialize file", path.string());
                                 }
 
                                 w.Flush();
@@ -76,13 +79,13 @@ namespace ifr {
                                 fout.close();
 
                             } else {
-                                ifr::logger::log("Config", "Can not open file (w): " + path.string());
+                                ifr::logger::err("Config", "Can not open file (w)", path.string());
                                 return;
                             }
                         } catch (std::exception &err) {
-                            ifr::logger::log("Config", "Can not write file: " + path.string() + ", err: " + err.what());
+                            ifr::logger::err("Config", "Can not write file", path.string() + ", err: " + err.what());
                         } catch (...) {
-                            ifr::logger::log("Config", "Can not write file: " + path.string());
+                            ifr::logger::err("Config", "Can not write file", path.string());
                         }
                     },
                     [&info, data, path]() {
@@ -95,18 +98,21 @@ namespace ifr {
 
                                 try {
                                     info.deserialize(data, d);
+                                } catch (std::exception &err) {
+                                    ifr::logger::err("Config", "Can not deserialize file",
+                                                     path.string() + ", err: " + err.what());
                                 } catch (...) {
-                                    ifr::logger::log("Config", "Can not deserialize file: " + path.string());
+                                    ifr::logger::err("Config", "Can not deserialize file", path.string());
                                 }
                                 fin.close();
                             } else {
-                                ifr::logger::log("Config", "Can not open file (r): " + path.string());
+                                ifr::logger::err("Config", "Can not open file (r)", path.string());
                                 return;
                             }
                         } catch (std::exception &err) {
-                            ifr::logger::log("Config", "Can not read file: " + path.string() + ", err: " + err.what());
+                            ifr::logger::err("Config", "Can not read file", path.string() + ", err: " + err.what());
                         } catch (...) {
-                            ifr::logger::log("Config", "Can not read file: " + path.string());
+                            ifr::logger::err("Config", "Can not read file", path.string());
                         }
                     }
             };
