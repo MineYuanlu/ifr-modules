@@ -61,6 +61,27 @@ std::function<void()> load;//加载
 };
 ```
 
+## 辅助函数
+
+简单的辅助函数, 用于在低标准C++上实现文件系统操作
+
+```cpp
+/**
+ * 创建文件夹 (递归创建, 调用系统命令)
+ * @param path 文件夹路径
+ */
+void mkDir(std::string path);
+```
+
+```cpp
+/**
+ * 获取路径的文件夹
+ * @param fname 文件路径
+ * @return 所在文件夹
+ */
+std::string getDir(std::string fname);
+```
+
 ## 样例
 
 ```cpp

@@ -14,7 +14,6 @@
 #include <string>
 #include <fstream>
 #include <functional>
-#include <filesystem>
 #include "logger/logger.hpp"
 #include "tools/tools.hpp"
 
@@ -41,6 +40,19 @@ namespace ifr {
         };
 
         /**
+         * 创建文件夹 (递归创建, 调用系统命令)
+         * @param path 文件夹路径
+         */
+        void mkDir(std::string path);
+
+        /**
+        * 获取路径的文件夹
+        * @param fname 文件路径
+        * @return 所在文件夹
+        */
+        std::string getDir(std::string fname);
+
+        /**
          * 注册一个配置文件
          * @tparam T 配置文件数据类型
          * @param name 配置文件名称
@@ -50,27 +62,20 @@ namespace ifr {
          */
         template<typename T>
         ConfigController createConfig(const std::string &name, T *const data, const ConfigInfo<T> &info) {
-            std::filesystem::path path(dir + name + ".json");
-            path = absolute(path);
-            {
-                const auto parent = path.parent_path();
-                if (!parent.empty() && !exists(parent))std::filesystem::create_directories(parent);
-            }
+            const auto fname = dir + name + ".json";
+            mkDir(getDir(fname));
             ConfigController cc = {
-                    [&info, data, path]() {
+                    [&info, fname, data]() {
                         try {
-                            std::ofstream fout(path);
+                            std::ofstream fout(fname);
                             if (fout.is_open()) {
                                 rapidjson::OStreamWrapper osw(fout);
                                 rapidjson::Writer<OStreamWrapper> w(osw);
 
                                 try {
                                     info.serialize(data, w);
-                                } catch (std::exception &err) {
-                                    ifr::logger::err("Config", "Can not serialize file",
-                                                     path.string() + ", err: " + err.what());
                                 } catch (...) {
-                                    ifr::logger::err("Config", "Can not serialize file", path.string());
+                                    ifr::logger::log("Config", "Can not serialize file: " + fname);
                                 }
 
                                 w.Flush();
@@ -79,18 +84,18 @@ namespace ifr {
                                 fout.close();
 
                             } else {
-                                ifr::logger::err("Config", "Can not open file (w)", path.string());
+                                ifr::logger::log("Config", "Can not open file (w): " + fname);
                                 return;
                             }
                         } catch (std::exception &err) {
-                            ifr::logger::err("Config", "Can not write file", path.string() + ", err: " + err.what());
+                            ifr::logger::log("Config", "Can not write file: " + fname + ", err: " + err.what());
                         } catch (...) {
-                            ifr::logger::err("Config", "Can not write file", path.string());
+                            ifr::logger::log("Config", "Can not write file: " + fname);
                         }
                     },
-                    [&info, data, path]() {
+                    [&info, fname, data]() {
                         try {
-                            std::ifstream fin(path);
+                            std::ifstream fin(fname);
                             if (fin.is_open()) {
                                 Document d;
                                 rapidjson::IStreamWrapper isw(fin);
@@ -98,21 +103,18 @@ namespace ifr {
 
                                 try {
                                     info.deserialize(data, d);
-                                } catch (std::exception &err) {
-                                    ifr::logger::err("Config", "Can not deserialize file",
-                                                     path.string() + ", err: " + err.what());
                                 } catch (...) {
-                                    ifr::logger::err("Config", "Can not deserialize file", path.string());
+                                    ifr::logger::log("Config", "Can not deserialize file: " + fname);
                                 }
                                 fin.close();
                             } else {
-                                ifr::logger::err("Config", "Can not open file (r)", path.string());
+                                ifr::logger::log("Config", "Can not open file (r): " + fname);
                                 return;
                             }
                         } catch (std::exception &err) {
-                            ifr::logger::err("Config", "Can not read file", path.string() + ", err: " + err.what());
+                            ifr::logger::log("Config", "Can not read file: " + fname + ", err: " + err.what());
                         } catch (...) {
-                            ifr::logger::err("Config", "Can not read file", path.string());
+                            ifr::logger::log("Config", "Can not read file: " + fname);
                         }
                     }
             };

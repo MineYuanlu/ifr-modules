@@ -74,12 +74,8 @@ namespace ifr {
 
         void writePlanInfo(const PlanInfo &info) {
             if (!info.loaded)return;
-            std::filesystem::path file("runtime/plans/" + info.name + ".json");
-            file = absolute(file);
-            {
-                const auto parent = file.parent_path();
-                if (!parent.empty() && !exists(parent))std::filesystem::create_directories(parent);
-            }
+            std::string file = "runtime/plans/" + info.name + ".json";
+            ifr::Config::mkDir(ifr::Config::getDir(file));
             std::ofstream fout(file, std::ios_base::out | std::ios_base::trunc);
             if (fout.is_open()) {
                 rapidjson::OStreamWrapper osw(fout);
