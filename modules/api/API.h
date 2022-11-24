@@ -37,7 +37,7 @@ namespace ifr {
          * @brief 初始化服务器
          * @param async 是否异步, false=直接在当前线程循环
          */
-        void init(bool async = false);
+        void init(const std::string &url = "0.0.0.0:8000", bool async = false);
 
         /**
          * @brief websocket广播

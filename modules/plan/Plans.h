@@ -430,6 +430,9 @@ namespace ifr {
         /**@return 当前状态*/
         int getState();
 
+        /**重置时退出程序*/
+        void setExitOnReset(bool exitOnReset);
+
 
         enum msgType {
             /**日志*/

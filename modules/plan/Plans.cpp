@@ -28,6 +28,8 @@ namespace ifr {
         bool hasOutter = false;
         MsgOutter outter;//消息输出器
 
+        bool exitOnReset = false;
+
         FORCE_INLINE void outMsg(msgType mt, const std::string &t, const std::string &st, const std::string &m) {
             if (hasOutter)outter(mt, t, st, m);
         }
@@ -244,7 +246,14 @@ namespace ifr {
             void reset() {
                 std::unique_lock<std::recursive_mutex> lock(RunData::running_mtx);
                 ifr::logger::log("Plan", "reset(): running", running ? "true" : "false");
-                outMsg(LOG, "Plan", "reset()", "running = " + std::string(running ? "true" : "false"));
+                outMsg(LOG, "Plan", "reset()", "running = " + std::string(running ? "true" : "false")
+                                               + ", eor = " + std::string(exitOnReset ? "true" : "false"));
+
+                if (exitOnReset) {
+                    ifr::logger::log("Plan", "reset()", "exit");
+                    exit(-10);
+                }
+
                 if (!running)return;
 
                 untilStep(4, true);//结束
@@ -357,6 +366,7 @@ namespace ifr {
 
         void usePlanInfo(const std::string &name) {
             std::unique_lock<std::recursive_mutex> lock(mtx);
+            ifr::logger::log("Plan", "usePlan", name);
             if (currentPlans != name) {
                 currentPlans = name;
                 cc.save();
@@ -367,15 +377,21 @@ namespace ifr {
         /**启动计划*/
         bool startPlan() {
             std::unique_lock<std::recursive_mutex> lock(mtx);
+            ifr::logger::log("Plan", "startPlan", currentPlans);
             if (currentPlans.empty() || !plans[currentPlans].loaded)return false;
             return RunData::start(currentPlans);
         }
 
-        void stopPlan() { RunData::reset(); }
+        void stopPlan() {
+            ifr::logger::log("Plan", "stopPlan");
+            RunData::reset();
+        }
 
         bool isRunning() { return RunData::running; }
 
         int getState() { return RunData::state; }
+
+        void setExitOnReset(bool eor) { exitOnReset = eor; }
 
         void registerMsgOut(const MsgOutter &o) {
             hasOutter = true;
