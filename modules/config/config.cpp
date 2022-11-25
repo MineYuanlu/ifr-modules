@@ -5,6 +5,7 @@
 
 namespace ifr {
     namespace Config {
+#if !IFR_CONFIG_USE_FS
         void mkDir(std::string path) {
             if (path.empty())return;
 #if __OS__ == __OS_Windows__
@@ -27,6 +28,7 @@ namespace ifr {
             if ((index = fname.find_last_of(_t)) == std::string::npos)return "";
             return fname.substr(0, index);
         }
+#endif
     };
 
 } // ifr
