@@ -50,10 +50,6 @@ namespace ifr {
             bool isIn{};
 
 
-            void operator()(std::ostream &fout) const {
-                fout << type << std::endl << description << std::endl << (isIn ? 't' : 'f') << std::endl;
-            }
-
             template<class T>
             void operator()(rapidjson::Writer<T> &jout) const {
                 jout.StartObject();
@@ -63,16 +59,6 @@ namespace ifr {
                 jout.EndObject();
             }
 
-
-            static TaskIODescription read(std::istream &fin) {
-                std::string buf;
-                TaskIODescription t;
-                std::getline(fin, t.type);
-                std::getline(fin, t.description);
-                std::getline(fin, buf);
-                t.isIn = buf == "t";
-                return t;
-            }
 
             static TaskIODescription read(json_in &jin) {
                 return {
@@ -128,14 +114,6 @@ namespace ifr {
             std::map<std::string, TaskArgDescription> args;
 
 
-            void operator()(std::ostream &fout) const {
-                fout << group << std::endl << description << std::endl << io.size() << std::endl;
-                for (const auto &e: io) {
-                    fout << e.first << std::endl;
-                    e.second(fout);
-                }
-            }
-
             template<class T>
             void operator()(rapidjson::Writer<T> &jout) const {
                 jout.StartObject();
@@ -157,20 +135,6 @@ namespace ifr {
             }
 
 
-            static TaskDescription read(std::istream &fin) {
-                std::string buf;
-                TaskDescription t;
-                std::getline(fin, t.group);
-                std::getline(fin, t.description);
-                std::getline(fin, buf);
-                int amt = stoi(buf);
-                for (int i = 0; i < amt; ++i) {
-                    std::getline(fin, buf);
-                    t.io[buf] = TaskIODescription::read(fin);
-                }
-                return t;
-            }
-
             static TaskDescription read(json_in &jin) {
                 TaskDescription t = {
                         jin["group"].GetString(),
@@ -190,10 +154,6 @@ namespace ifr {
             std::string channel;
 
 
-            void operator()(std::ostream &fout) const {
-                fout << channel << std::endl;
-            }
-
             template<class T>
             void operator()(rapidjson::Writer<T> &jout) const {
                 jout.StartObject();
@@ -201,12 +161,6 @@ namespace ifr {
                 jout.EndObject();
             }
 
-
-            static TaskIOInfo read(std::istream &fin) {
-                TaskIOInfo t;
-                std::getline(fin, t.channel);
-                return t;
-            }
 
             static TaskIOInfo read(json_in &jin) {
                 return {jin["channel"].GetString()};
@@ -223,10 +177,6 @@ namespace ifr {
             /**任务参数 (参数名-数据) */
             std::map<std::string, std::string> args;
 
-
-            void operator()(std::ostream &fout) const {
-                fout << (enable ? 't' : 'f') << std::endl << io.size() << std::endl;
-            }
 
             template<class T>
             void operator()(rapidjson::Writer<T> &jout) const {
@@ -247,20 +197,6 @@ namespace ifr {
                 jout.EndObject();
             }
 
-
-            static TaskInfo read(std::istream &fin) {
-                std::string buf;
-                TaskInfo t;
-                std::getline(fin, buf);
-                t.enable = buf == "t";
-                std::getline(fin, buf);
-                int amt = std::stoi(buf);
-                for (int i = 0; i < amt; ++i) {
-                    std::getline(fin, buf);
-                    t.io[buf] = TaskIOInfo::read(fin);
-                }
-                return t;
-            }
 
             static TaskInfo read(json_in &jin) {
                 TaskInfo t = {
@@ -285,14 +221,6 @@ namespace ifr {
             std::map<const std::string, TaskInfo> tasks;
 
 
-            void operator()(std::ostream &fout) const {
-                fout << name << std::endl << description << std::endl << tasks.size() << std::endl;
-                for (const auto &e: tasks) {
-                    fout << e.first << std::endl;
-                    e.second(fout);
-                }
-            }
-
             template<class T>
             void operator()(rapidjson::Writer<T> &jout) const {
                 jout.StartObject();
@@ -305,21 +233,6 @@ namespace ifr {
                     jout.EndObject();
                 }
                 jout.EndObject();
-            }
-
-            static PlanInfo read(std::istream &fin) {
-                std::string buf;
-                PlanInfo t;
-                std::getline(fin, t.name);
-                std::getline(fin, t.description);
-                std::getline(fin, buf);
-                int amt = stoi(buf);
-                for (int i = 0; i < amt; ++i) {
-                    std::getline(fin, buf);
-                    t.tasks[buf] = TaskInfo::read(fin);
-                }
-                t.loaded = true;
-                return t;
             }
 
             static PlanInfo read(json_in &jin) {
