@@ -37,7 +37,7 @@ namespace ifr {
          * @brief 初始化服务器
          * @param async 是否异步, false=直接在当前线程循环
          */
-        void init(bool async = false);
+        void init(const std::string &url = "0.0.0.0:8000", bool async = false);
 
         /**
          * @brief websocket广播
@@ -61,11 +61,11 @@ namespace ifr {
         /**耗时监控器*/
         class TimeWatcher {
         public:
-            typedef __int64 tick_t;
+            typedef int64_t tick_t;
             typedef double unit_t;
         private:
             tick_t *mat;//时间点矩阵 [worker][point][c1/c2]
-            int *mat_id;//时间点矩阵的转台 [worker][w_id/r_id]
+            int *mat_id;//时间点矩阵的状态 [worker][w_id/r_id]
             std::mutex cal_mutex;//计算锁
             std::mutex stat_lock;//状态锁
         public:
@@ -124,23 +124,32 @@ namespace ifr {
              * @param worker 工作ID
              * @param time 记录时间
              */
+#if DEBUG_TIME
+
             inline void setTime(const size_t &point, const size_t &worker, const tick_t &time) {
 #if DEBUG
                 if (point >= 0 && worker >= 0 && point < point_amount && worker < worker_amount) {
 #endif
-                mat[worker * point_amount * 2 + point * 2 + mat_id[worker * 2]] = time;
+                    mat[worker * point_amount * 2 + point * 2 + mat_id[worker * 2]] = time;
 #if DEBUG
-                return;
-            }
-            throw std::runtime_error("[TimeWatcher] " + type + ": Bad Arg: p=" + std::to_string(point) + ", w=" +
-                                     std::to_string(worker) + ", t=" + std::to_string(time));
+                    return;
+                }
+                throw std::runtime_error("[TimeWatcher] " + type + ": Bad Arg: p=" + std::to_string(point) + ", w=" +
+                                         std::to_string(worker) + ", t=" + std::to_string(time));
 #endif
             }
+
+#else
+            FORCE_INLINE void setTime(const size_t &point, const size_t &worker, const tick_t &time) {}
+
+#endif
 
             TimeWatcher(std::string type, const unit_t unitMs, const size_t pointAmount, const size_t workerAmount) :
                     type(std::move(type)), unit_ms(unitMs), point_amount(pointAmount), worker_amount(workerAmount) {
                 mat = new tick_t[pointAmount * workerAmount * 2];
                 mat_id = new int[workerAmount * 2];
+                memset(mat, 0, sizeof(tick_t) * pointAmount * workerAmount * 2);
+                memset(mat_id, 0, sizeof(int) * workerAmount * 2);
             }
 
             ~TimeWatcher() {
@@ -155,7 +164,6 @@ namespace ifr {
         /**
          * 注册耗时检查点
          * @param type 类型名称
-         * @param description 此类型的描述
          * @param unit_ms 单位, 即(t1-t0)/unit_ms
          * @param point_amount 检查点数量
          * @param worker_amount 工作线程数量

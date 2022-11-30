@@ -28,6 +28,8 @@ namespace ifr {
         bool hasOutter = false;
         MsgOutter outter;//消息输出器
 
+        bool exitOnReset = false;
+
         FORCE_INLINE void outMsg(msgType mt, const std::string &t, const std::string &st, const std::string &m) {
             if (hasOutter)outter(mt, t, st, m);
         }
@@ -72,12 +74,17 @@ namespace ifr {
 
         void writePlanInfo(const PlanInfo &info) {
             if (!info.loaded)return;
+#if IFR_CONFIG_USE_FS
             std::filesystem::path file("runtime/plans/" + info.name + ".json");
             file = absolute(file);
             {
                 const auto parent = file.parent_path();
                 if (!parent.empty() && !exists(parent))std::filesystem::create_directories(parent);
             }
+#else
+            std::string file = "runtime/plans/" + info.name + ".json";
+            ifr::Config::mkDir(ifr::Config::getDir(file));
+#endif
             std::ofstream fout(file, std::ios_base::out | std::ios_base::trunc);
             if (fout.is_open()) {
                 rapidjson::OStreamWrapper osw(fout);
@@ -244,7 +251,14 @@ namespace ifr {
             void reset() {
                 std::unique_lock<std::recursive_mutex> lock(RunData::running_mtx);
                 ifr::logger::log("Plan", "reset(): running", running ? "true" : "false");
-                outMsg(LOG, "Plan", "reset()", "running = " + std::string(running ? "true" : "false"));
+                outMsg(LOG, "Plan", "reset()", "running = " + std::string(running ? "true" : "false")
+                                               + ", eor = " + std::string(exitOnReset ? "true" : "false"));
+
+                if (exitOnReset) {
+                    ifr::logger::log("Plan", "reset()", "exit");
+                    exit(-10);
+                }
+
                 if (!running)return;
 
                 untilStep(4, true);//结束
@@ -298,16 +312,16 @@ namespace ifr {
                                     std::unique_lock<std::recursive_mutex> lock(RunData::state_mtx);
                                     if (runID == rid && state == 4)waitingTasks.erase(tname);//可以自动释放最后一步
                                 } catch (PlanError &err) {
-                                    ifr::logger::log("Plan", "PlanError", tname + ", " + err.what());
+                                    ifr::logger::err("Plan", "PlanError", tname + ", " + err.what());
                                     outMsg(POPUP, "Plan", "PlanError", tname + ": " + err.what());
                                     std::thread t(reset);
                                     while (!t.joinable());
                                     t.detach();
                                 } catch (std::exception &err) {
-                                    ifr::logger::log("Plan", "Error", tname + ", " + err.what());
+                                    ifr::logger::err("Plan", "Error", tname + ", " + err.what());
                                     outMsg(POPUP, "Plan", "Error", tname + ": " + err.what());
                                 } catch (...) {
-                                    ifr::logger::log("Plan", "Error", tname);
+                                    ifr::logger::err("Plan", "Error", tname);
                                     outMsg(POPUP, "Plan", "UnknownError", tname);
                                 }
                                 ifr::logger::log("Plan", "Exit Running", tname);
@@ -357,6 +371,7 @@ namespace ifr {
 
         void usePlanInfo(const std::string &name) {
             std::unique_lock<std::recursive_mutex> lock(mtx);
+            ifr::logger::log("Plan", "usePlan", name);
             if (currentPlans != name) {
                 currentPlans = name;
                 cc.save();
@@ -367,15 +382,21 @@ namespace ifr {
         /**启动计划*/
         bool startPlan() {
             std::unique_lock<std::recursive_mutex> lock(mtx);
+            ifr::logger::log("Plan", "startPlan", currentPlans);
             if (currentPlans.empty() || !plans[currentPlans].loaded)return false;
             return RunData::start(currentPlans);
         }
 
-        void stopPlan() { RunData::reset(); }
+        void stopPlan() {
+            ifr::logger::log("Plan", "stopPlan");
+            RunData::reset();
+        }
 
         bool isRunning() { return RunData::running; }
 
         int getState() { return RunData::state; }
+
+        void setExitOnReset(bool eor) { exitOnReset = eor; }
 
         void registerMsgOut(const MsgOutter &o) {
             hasOutter = true;

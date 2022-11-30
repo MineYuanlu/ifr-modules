@@ -10,7 +10,6 @@
 using namespace std;
 namespace ifr {
     namespace API {
-        static const string url = "0.0.0.0:8000";
 #define COMMON_JSON_HEADER "Access-Control-Allow-Origin:*\nContent-Type: application/json;charset:utf-8;\n" //通用头(json)
 #define COMMON_TEXT_HEADER "Access-Control-Allow-Origin:*\nContent-Type: text/plain;charset:utf-8;\n" //通用头(text)
 #define STR_MG2STD(s) std::string((s).ptr,(s).len)
@@ -269,21 +268,21 @@ namespace ifr {
                     });
         }
 
-        void init(bool async) {
+        void init(const std::string &url, bool async) {
             if (async) {
-                thread t(init, false);
+                thread t(init, url, false);
                 while (!t.joinable());
                 t.detach();
             } else {
                 ifr::Plans::registerMsgOut(sendWs);
                 registerRoute();
-                ifr::logger::log("api", "启动API");
+                ifr::logger::log("api", "Start API");
                 struct mg_mgr mgr{};
                 mg_mgr_init(&mgr);
                 mg_http_listen(&mgr, url.c_str(), fn, nullptr);     // Create listening connection
 
 
-                ifr::logger::log("api", "开始监听", url);
+                ifr::logger::log("api", "Start listen", url);
                 for (;;) mg_mgr_poll(&mgr, 1000);                   // Block forever
             }
         }

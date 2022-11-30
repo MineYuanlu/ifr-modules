@@ -12,4 +12,4 @@ include_directories(../lib)
 
 aux_source_directory(./testers SRCX)
 add_executable(Google_Tests_run ${SRCX})
-target_link_libraries(Google_Tests_run gtest gtest_main plan tools api)
+target_link_libraries(Google_Tests_run gtest gtest_main plan config tools api)

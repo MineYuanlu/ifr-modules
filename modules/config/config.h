@@ -14,11 +14,22 @@
 #include <string>
 #include <fstream>
 #include <functional>
-#include <filesystem>
 #include "logger/logger.hpp"
 #include "tools/tools.hpp"
 
 using namespace rapidjson;
+
+#define IFR_CONFIG_USE_FS RAPIDJSON_HAS_CXX17
+
+#if IFR_CONFIG_USE_FS
+
+#include <filesystem>
+
+#define IFR_CONFIG_PATH2STR(path) ((path).string())
+#else
+#define IFR_CONFIG_PATH2STR(path) (path)
+#endif
+
 namespace ifr {
     namespace Config {
         static const std::string dir = "runtime/config/";
@@ -40,6 +51,21 @@ namespace ifr {
             std::function<void(T *const, const rapidjson::Document &)> deserialize;//反序列化
         };
 
+#if !IFR_CONFIG_USE_FS
+        /**
+         * 创建文件夹 (递归创建, 调用系统命令)
+         * @param path 文件夹路径
+         */
+        void mkDir(std::string path);
+
+        /**
+        * 获取路径的文件夹
+        * @param fname 文件路径
+        * @return 所在文件夹
+        */
+        std::string getDir(std::string fname);
+#endif
+
         /**
          * 注册一个配置文件
          * @tparam T 配置文件数据类型
@@ -50,12 +76,17 @@ namespace ifr {
          */
         template<typename T>
         ConfigController createConfig(const std::string &name, T *const data, const ConfigInfo<T> &info) {
+#if IFR_CONFIG_USE_FS
             std::filesystem::path path(dir + name + ".json");
             path = absolute(path);
             {
                 const auto parent = path.parent_path();
                 if (!parent.empty() && !exists(parent))std::filesystem::create_directories(parent);
             }
+#else
+            const auto path = dir + name + ".json";
+            mkDir(getDir(path));
+#endif
             ConfigController cc = {
                     [&info, data, path]() {
                         try {
@@ -66,8 +97,11 @@ namespace ifr {
 
                                 try {
                                     info.serialize(data, w);
+                                } catch (std::exception &err) {
+                                    ifr::logger::err("Config", "Can not serialize file",
+                                                     IFR_CONFIG_PATH2STR(path) + ", err: " + err.what());
                                 } catch (...) {
-                                    ifr::logger::log("Config", "Can not serialize file: " + path.string());
+                                    ifr::logger::err("Config", "Can not serialize file", path);
                                 }
 
                                 w.Flush();
@@ -76,13 +110,14 @@ namespace ifr {
                                 fout.close();
 
                             } else {
-                                ifr::logger::log("Config", "Can not open file (w): " + path.string());
+                                ifr::logger::err("Config", "Can not open file (w)", path);
                                 return;
                             }
                         } catch (std::exception &err) {
-                            ifr::logger::log("Config", "Can not write file: " + path.string() + ", err: " + err.what());
+                            ifr::logger::err("Config", "Can not write file",
+                                             IFR_CONFIG_PATH2STR(path) + ", err: " + err.what());
                         } catch (...) {
-                            ifr::logger::log("Config", "Can not write file: " + path.string());
+                            ifr::logger::err("Config", "Can not write file", path);
                         }
                     },
                     [&info, data, path]() {
@@ -95,18 +130,22 @@ namespace ifr {
 
                                 try {
                                     info.deserialize(data, d);
+                                } catch (std::exception &err) {
+                                    ifr::logger::err("Config", "Can not deserialize file",
+                                                     IFR_CONFIG_PATH2STR(path) + ", err: " + err.what());
                                 } catch (...) {
-                                    ifr::logger::log("Config", "Can not deserialize file: " + path.string());
+                                    ifr::logger::err("Config", "Can not deserialize file", path);
                                 }
                                 fin.close();
                             } else {
-                                ifr::logger::log("Config", "Can not open file (r): " + path.string());
+                                ifr::logger::err("Config", "Can not open file (r)", path);
                                 return;
                             }
                         } catch (std::exception &err) {
-                            ifr::logger::log("Config", "Can not read file: " + path.string() + ", err: " + err.what());
+                            ifr::logger::err("Config", "Can not read file",
+                                             IFR_CONFIG_PATH2STR(path) + ", err: " + err.what());
                         } catch (...) {
-                            ifr::logger::log("Config", "Can not read file: " + path.string());
+                            ifr::logger::err("Config", "Can not read file", path);
                         }
                     }
             };
