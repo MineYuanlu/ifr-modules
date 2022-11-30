@@ -12,9 +12,11 @@
 namespace ifr {
     namespace logger {
 
-#define IFR_LOGGER(type, __Expr__) ifr::logger::log(type,#__Expr__,__Expr__)
-#define IFR_LOGGER_LOE(type, __Expr__) ifr::logger::log_or_err(type,#__Expr__,__Expr__)
+#define IFR_LOGGER(type, __Expr__) ifr::logger::log(type,#__Expr__,__Expr__) //打印表达式字符串及其结果
+#define IFR_LOGGER_LOE(type, __Expr__) ifr::logger::log_or_err(type,#__Expr__,__Expr__)//打印表达式及其结果(若结果为false(或0等)则使用err打印)
+#define IFR_LOC_LOGGER(__Expr__) ifr::logger::log_loc(__FILE__, __LINE__, __func__,#__Expr__,__Expr__)//定位打印
         static std::mutex log_mtx;
+
 
         /**
          * @brief 打印一行日志
@@ -176,6 +178,24 @@ namespace ifr {
         inline void log_or_err(const std::string &type, const std::string &sub_type, const T &data) {
             if (data)log(type, sub_type, data);
             else err(type, sub_type, data);
+        }
+
+        /**
+         * @brief 宏打印辅助函数
+         * @details [file:line:func] expr -> result
+         * @param file 文件名
+         * @param line 行号
+         * @param func 方法名
+         * @param expr 表达式
+         * @param data 表达式结果
+         */
+        template<typename T>
+        inline void
+        log_loc(const std::string &file, const int &line, const std::string &func, const std::string &expr,
+                const T &data) {
+            std::unique_lock<std::mutex> lock(log_mtx);
+            std::cout << '[' << file << ':' << line << ':' << func << "] "
+                      << expr << " -> " << data << std::endl;
         }
 
     }
