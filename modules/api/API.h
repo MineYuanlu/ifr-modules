@@ -20,10 +20,21 @@
 
 using namespace rapidjson;
 
+#define IFRAPI_HAS_VARIABLE RAPIDJSON_HAS_CXX17
+
 namespace ifr {
 
     namespace API {
-
+#if IFRAPI_HAS_VARIABLE
+#define IFRAPI_VARIABLE(editable, group, prefix, type, name, def, min, max)                                      \
+    prefix type name = (((def)<(min))?(min):(((def)>(max))?(max):(def)));                                        \
+    ifr::API::Variable::registerVar<type>(editable, #group, #prefix, #type, #name, &(name), #def, #min, #max);   \
+    ///定义一个变量, 可编辑, 属组, 变量修饰, 变量类型, 变量名, 默认值, 最小值, 最大值
+#define IFRAPI_VARIABLE_NC(editable, group, prefix, type, name, def)                                             \
+    prefix type name = def;                                                                                      \
+    ifr::API::Variable::registerVar<type>(editable, #group, #prefix, #type, #name, &(name), #def, "","");        \
+    ///定义一个变量(不可比较), 可编辑, 属组, 变量修饰, 变量类型, 变量名, 默认值
+#endif
 
         /**
          * 获取query的值
@@ -140,6 +151,7 @@ namespace ifr {
             }
 
 #else
+
             FORCE_INLINE void setTime(const size_t &point, const size_t &worker, const tick_t &time) {}
 
 #endif
@@ -170,6 +182,83 @@ namespace ifr {
          */
         std::shared_ptr<TimeWatcher> registerTimePoint(const std::string &type, const TimeWatcher::unit_t &unit_ms,
                                                        const size_t &point_amount, const size_t &worker_amount = 1);
+
+#if IFRAPI_HAS_VARIABLE
+
+        class Variable {
+        public:
+            static std::map<std::string, Variable> vars;
+            static std::mutex mutex;
+            static bool locked;
+            static ifr::Config::ConfigController cc;
+
+            const bool editable_;
+            const std::string group_;
+            const std::string prefix_;
+            const std::string type_;
+            const std::string name_;
+            void *const data_;
+            const std::string def_;
+            const std::string min_;
+            const std::string max_;
+
+            const std::function<void(std::string)> setValue;
+            const std::function<std::string()> getValue;
+
+            template<class T>
+            Variable(bool editable, std::string group, std::string prefix,
+                     std::string type, std::string name, T *const data,
+                     std::string def, std::string min, std::string max) :
+                    editable_(editable), group_(std::move(group)), prefix_(std::move(prefix)),
+                    type_(std::move(type)), name_(std::move(name)), data_((void *) data),
+                    def_(std::move(def)), min_(std::move(min)), max_(std::move(max)) {
+
+                getValue = [this]() { return std::to_string(*((T *) data_)); };
+                if (std::is_same<T, bool>::value) {
+                    setValue = [this](auto v) { *((T *) data_) = v == "true"; };
+                    getValue = [this]() { return (*((T *) data_)) ? "true" : "false"; };
+                } else if (std::is_same<T, int>::value) {
+                    setValue = [this](auto v) { *((T *) data_) = std::stoi(v); };
+                } else if (std::is_same<T, double>::value) {
+                    setValue = [this](auto v) { *((T *) data_) = std::stod(v); };
+                } else if (std::is_same<T, float>::value) {
+                    setValue = [this](auto v) { *((T *) data_) = std::stof(v); };
+                } else if (std::is_same<T, long>::value) {
+                    setValue = [this](auto v) { *((T *) data_) = std::stol(v); };
+                } else throw std::runtime_error("[API Variable] Unsupported type: " + type_);
+
+                if (!editable)setValue = [](auto) {};
+
+            }
+
+            /**
+             * @brief 注册一个可调变量
+             * @tparam T 变量类型
+             * @param editable 是否可以编辑
+             * @param group 所属组
+             * @param prefix 变量修饰
+             * @param type 类型
+             * @param name 名称
+             * @param data 数据指针
+             * @param def 默认值
+             * @param min 最小值
+             * @param max 最大值
+             */
+            template<class T>
+            static void registerVar(bool editable, const std::string &group, const std::string &prefix,
+                                    const std::string &type, const std::string &name,
+                                    T *data, const std::string &def, const std::string &min, const std::string &max);
+
+            /**保存所有变量*/
+            static void save();
+
+            /**初始化*/
+            static void init();
+
+        };
+
+
+#endif
     }
 } // ifr
 

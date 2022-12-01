@@ -40,7 +40,7 @@ TEST(DELAY_QUEUE, basic) {
     t.join();
 }
 
-TEST(DELAY_QUEUE, fast) {
+TEST(DELAY_QUEUE, slow) {
     auto base = std::chrono::system_clock::now();
     delay_queue<std::unique_ptr<std::string>> q;
     auto t = std::thread([&q, &base]() {
@@ -48,6 +48,27 @@ TEST(DELAY_QUEUE, fast) {
         q.push(std::make_unique<std::string>("str 2"), base + 2s);
         q.push(std::make_unique<std::string>("str 1"), base + 1s);
         q.push(std::make_unique<std::string>("str 3"), base + 3s);
+        SLEEP(SLEEP_TIME(3.1));
+        q.close();
+        ASSERT_THROW(q.push(std::make_unique<std::string>("bad"), base), closed_delay_queue);
+    });
+
+    ASSERT_NO_THROW(dump("start", base));
+    for (int i = 0; i < 3; i++)dump(*q.pop(), base);
+    ASSERT_THROW(dump(*q.pop(), base), closed_delay_queue);
+
+    while (!t.joinable());
+    t.join();
+}
+
+TEST(DELAY_QUEUE, fast) {
+    auto base = std::chrono::system_clock::now();
+    delay_queue<std::unique_ptr<std::string>> q;
+    auto t = std::thread([&q, &base]() {
+        using namespace std::chrono_literals;
+        q.push(std::make_unique<std::string>("str 2"), base);
+        q.push(std::make_unique<std::string>("str 1"), base);
+        q.push(std::make_unique<std::string>("str 3"), base);
         SLEEP(SLEEP_TIME(3.1));
         q.close();
         ASSERT_THROW(q.push(std::make_unique<std::string>("bad"), base), closed_delay_queue);

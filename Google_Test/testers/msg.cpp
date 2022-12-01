@@ -51,6 +51,8 @@ void test_basic() {
                 const auto &data = sub.pop();
                 log(t_sub, "Pop", data);
             }
+        } catch (ifr::Msg::MessageError_Broke &e) {
+            log(t_sub, "Broke", e.what());
         } catch (ifr::Msg::MessageError_NoMsg &e) {
             log(t_sub, "No Msg", e.what());
         } catch (std::runtime_error &err) {
@@ -96,6 +98,8 @@ void test_n_sub(const int n, ifr::Msg::DistributeType type, bool subDelay = fals
                     log(t_sub, i, "Pop", data);
                     if (subDelay)SLEEP(delay * 2);
                 }
+            } catch (ifr::Msg::MessageError_Broke &e) {
+                log(t_sub, "Broke", e.what());
             } catch (ifr::Msg::MessageError_NoMsg &e) {
                 log(t_sub, i, "No Msg", e.what());
             } catch (std::runtime_error &err) {
@@ -184,7 +188,7 @@ TEST(MSG, n_sub_each) {// 多订阅 以 each 分发模式测试
 }
 
 
-TEST(MSG, pop_for) {
+TEST(MSG, pop_for) {//TODO 偶发bug：锁异常:  pub.push 锁住无法继续 (未知情况)
 
     std::counting_semaphore s1(0);
     std::counting_semaphore s2(0);
@@ -198,7 +202,7 @@ TEST(MSG, pop_for) {
                 SLEEP(delay);
                 const string data = "Data " + std::to_string(i);
                 log(t_pub, "Push", data);
-                pub.push(data);
+                pub.push(data); //TODO bug
             }
         } catch (std::runtime_error &err) {
             log(t_pub, "Err", err.what());
@@ -214,6 +218,8 @@ TEST(MSG, pop_for) {
                 const auto &data = sub.pop_for(5);
                 log(t_sub, "Pop", data);
             }
+        } catch (ifr::Msg::MessageError_Broke &e) {
+            log(t_sub, "Broke", e.what());
         } catch (ifr::Msg::MessageError_NoMsg &e) {
             log(t_sub, "No Msg", e.what());
         } catch (std::runtime_error &err) {

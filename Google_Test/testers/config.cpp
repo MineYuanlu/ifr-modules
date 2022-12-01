@@ -5,8 +5,8 @@
 
 #include "gtest/gtest.h"
 #include "config/config.h"
-//#include "logger/logger.hpp"
-//
+#include "logger/logger.hpp"
+
 TEST(CONFIG, basic) {
     struct Point {
         int x, y;

@@ -133,7 +133,17 @@ namespace ifr {
                     for (const auto &r: http_route) {
                         if (!mg_http_match_uri(hm, r.pattern))continue;
                         if (mg_vcmp(&hm->method, r.method))continue;
-                        r.fn(c, ev, ev_data, fn_data);
+
+                        try {
+                            r.fn(c, ev, ev_data, fn_data);
+                        } catch (exception &e) {
+                            if (c->is_resp)
+                                mg_http_reply(c, 500, COMMON_TEXT_HEADER, e.what());
+                        } catch (...) {
+                            if (c->is_resp)
+                                mg_http_reply(c, 500, COMMON_TEXT_HEADER, "An unknown error has occurred");
+                        }
+
                         return;
                     }
                     mg_http_reply(c, 404, COMMON_TEXT_HEADER, "Not Found");
@@ -159,6 +169,72 @@ namespace ifr {
                         mg_http_reply(c, 200, COMMON_JSON_HEADER, TimeWatcherHelper::getTimeWatchList().c_str());
                     }
                     });
+            http_route.push_back(
+                    {"/vars/enable", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
+                        mg_http_reply(c, 200, COMMON_JSON_HEADER,
+#if IFRAPI_HAS_VARIABLE
+                                      "true"
+#else
+                                "false"
+#endif
+                        );
+                    }
+                    });
+#if IFRAPI_HAS_VARIABLE
+            http_route.push_back(
+                    {"/vars/var", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
+                        if (Variable::locked) {
+                            auto key = mgx_getquery(((mg_http_message *) ev_data)->query, "key");
+                            const auto itr = Variable::vars.find(STR_MG2STD(key));
+                            if (itr == Variable::vars.end())mg_http_reply(c, 404, COMMON_TEXT_HEADER, "Not Found");
+                            else mg_http_reply(c, 200, COMMON_TEXT_HEADER, itr->second.getValue().c_str());
+                        } else mg_http_reply(c, 500, COMMON_TEXT_HEADER, "uninitialized");
+                    }
+                    });
+            http_route.push_back(
+                    {"/vars/var", "POST", [](auto c, int ev, auto ev_data, auto fn_data) {
+                        if (Variable::locked) {
+                            auto hm = (mg_http_message *) ev_data;
+                            auto key = mgx_getquery(hm->query, "key");
+                            auto value = STR_MG2STD(hm->body);
+                            const auto itr = Variable::vars.find(STR_MG2STD(key));
+                            if (itr == Variable::vars.end())mg_http_reply(c, 404, COMMON_TEXT_HEADER, "Not Found");
+                            else {
+                                itr->second.setValue(value);
+                                mg_http_reply(c, 200, COMMON_TEXT_HEADER, itr->second.getValue().c_str());
+                            }
+                        } else mg_http_reply(c, 500, COMMON_TEXT_HEADER, "uninitialized");
+                    }
+                    });
+            http_route.push_back(
+                    {"/vars/descriptions", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
+                        if (Variable::locked) {
+                            static const char *json = nullptr;
+                            if (json == nullptr) {
+                                rapidjson::StringBuffer buf;
+                                rapidjson::Writer<decltype(buf)> w(buf);
+                                w.StartArray();
+                                for (const auto &e: Variable::vars) {
+                                    w.StartObject();
+                                    w.Key("editable"), w.Bool(e.second.editable_);
+                                    w.Key("group"), w.String(e.second.group_);
+                                    w.Key("prefix"), w.String(e.second.prefix_);
+                                    w.Key("type"), w.String(e.second.type_);
+                                    w.Key("name"), w.String(e.second.name_);
+                                    w.Key("def"), w.String(e.second.def_);
+                                    w.Key("min"), w.String(e.second.min_);
+                                    w.Key("max"), w.String(e.second.max_);
+                                    w.Key("key"), w.String(e.first);
+                                    w.EndObject();
+                                }
+                                w.EndArray();
+                                json = buf.GetString();
+                            }
+                            mg_http_reply(c, 200, COMMON_JSON_HEADER, json);
+                        } else mg_http_reply(c, 500, COMMON_TEXT_HEADER, "uninitialized");
+                    }
+                    });
+#endif
             http_route.push_back(
                     {"/task/descriptions", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
                         mg_http_reply(c, 200, COMMON_JSON_HEADER,
@@ -322,5 +398,52 @@ namespace ifr {
             return s;
         }
 
+#if IFRAPI_HAS_VARIABLE
+
+        std::map<std::string, Variable> Variable::vars;
+        std::mutex Variable::mutex;
+        bool Variable::locked;
+        ifr::Config::ConfigController Variable::cc;
+
+        void Variable::init() {
+            std::unique_lock<decltype(mutex)> lock(mutex);
+            if (locked)throw std::exception("[API Variable] Repeat initialization");
+            static ifr::Config::ConfigInfo<void> info = {
+                    [](void *a, auto &w) {
+                        std::unique_lock<decltype(mutex)> lock(mutex);
+                        w.StartObject();
+                        for (const auto &e: vars)w.Key(e.first), w.String(e.second.getValue());
+                        w.EndObject();
+                    },
+                    [](void *a, const rapidjson::Document &d) {
+                        std::unique_lock<decltype(mutex)> lock(mutex);
+                        for (const auto &e: d.GetObj()) {
+                            const std::string name = e.name.GetString();
+                            if (vars.count(name))
+                                vars.find(name)->second.setValue(e.value.GetString());
+                        }
+                    }
+            };
+            cc = ifr::Config::createConfig<void>("variable", nullptr, info);
+            cc.load();
+            locked = true;
+        }
+
+        void Variable::save() { cc.save(); }
+
+        template<class T>
+        void Variable::registerVar(bool editable, const std::string &group, const std::string &prefix,
+                                   const std::string &type, const std::string &name, T *const data,
+                                   const std::string &def, const std::string &min, const std::string &max) {
+            auto key = group + " " + name;
+            std::unique_lock<decltype(mutex)> lock(mutex);
+            if (locked)
+                throw std::runtime_error("[API Variable] Unable to register: " + key + ", locked");
+            if (vars.count(key))
+                throw std::runtime_error("[API Variable] Variable with key " + key + " already exists");
+            vars.emplace(key, ifr::API::Variable(editable, group, prefix, type, name, data, def, min, max));
+        }
+
+#endif
     }
 } // ifr
