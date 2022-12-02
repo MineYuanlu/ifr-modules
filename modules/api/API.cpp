@@ -185,8 +185,10 @@ namespace ifr {
                     {"/vars/var", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
                         if (Variable::locked) {
                             auto key = mgx_getquery(((mg_http_message *) ev_data)->query, "key");
-                            const auto itr = Variable::vars.find(STR_MG2STD(key));
-                            if (itr == Variable::vars.end())mg_http_reply(c, 404, COMMON_TEXT_HEADER, "Not Found");
+                            char buf[1024];
+                            mg_url_decode(key.ptr, key.len, buf, sizeof(buf), 0);
+                            const auto itr = Variable::vars.find(buf);
+                            if (itr == Variable::vars.end())mg_http_reply(c, 404, COMMON_TEXT_HEADER, "Not Found key");
                             else mg_http_reply(c, 200, COMMON_TEXT_HEADER, itr->second.getValue().c_str());
                         } else mg_http_reply(c, 500, COMMON_TEXT_HEADER, "uninitialized");
                     }
@@ -196,9 +198,11 @@ namespace ifr {
                         if (Variable::locked) {
                             auto hm = (mg_http_message *) ev_data;
                             auto key = mgx_getquery(hm->query, "key");
+                            char buf[1024];
+                            mg_url_decode(key.ptr, key.len, buf, sizeof(buf), 0);
                             auto value = STR_MG2STD(hm->body);
-                            const auto itr = Variable::vars.find(STR_MG2STD(key));
-                            if (itr == Variable::vars.end())mg_http_reply(c, 404, COMMON_TEXT_HEADER, "Not Found");
+                            const auto itr = Variable::vars.find(buf);
+                            if (itr == Variable::vars.end())mg_http_reply(c, 404, COMMON_TEXT_HEADER, "Not Found key");
                             else {
                                 itr->second.setValue(value);
                                 mg_http_reply(c, 200, COMMON_TEXT_HEADER, itr->second.getValue().c_str());
@@ -209,16 +213,27 @@ namespace ifr {
             http_route.push_back(
                     {"/vars/descriptions", "GET", [](auto c, int ev, auto ev_data, auto fn_data) {
                         if (Variable::locked) {
-                            static const char *json = nullptr;
-                            if (json == nullptr) {
+                            static string json;
+                            if (json.empty()) {
                                 rapidjson::StringBuffer buf;
                                 rapidjson::Writer<decltype(buf)> w(buf);
-                                w.StartArray();
+                                w.StartObject();
+                                w.Key("types"), w.StartObject();
+                                {
+                                    w.Key("bool"), w.String(typeid(bool).name());
+                                    w.Key("long"), w.String(typeid(long).name());
+                                    w.Key("int"), w.String(typeid(int).name());
+                                    w.Key("unsigned"), w.String(typeid(unsigned).name());
+                                    w.Key("unsigned long"), w.String(typeid(unsigned long).name());
+                                    w.Key("float"), w.String(typeid(float).name());
+                                    w.Key("double"), w.String(typeid(double).name());
+                                }
+                                w.EndObject();
+                                w.Key("vars"), w.StartArray();
                                 for (const auto &e: Variable::vars) {
                                     w.StartObject();
                                     w.Key("editable"), w.Bool(e.second.editable_);
                                     w.Key("group"), w.String(e.second.group_);
-                                    w.Key("prefix"), w.String(e.second.prefix_);
                                     w.Key("type"), w.String(e.second.type_);
                                     w.Key("name"), w.String(e.second.name_);
                                     w.Key("def"), w.String(e.second.def_);
@@ -228,9 +243,10 @@ namespace ifr {
                                     w.EndObject();
                                 }
                                 w.EndArray();
+                                w.EndObject();
                                 json = buf.GetString();
                             }
-                            mg_http_reply(c, 200, COMMON_JSON_HEADER, json);
+                            mg_http_reply(c, 200, COMMON_JSON_HEADER, json.c_str());
                         } else mg_http_reply(c, 500, COMMON_TEXT_HEADER, "uninitialized");
                     }
                     });
@@ -352,6 +368,9 @@ namespace ifr {
             } else {
                 ifr::Plans::registerMsgOut(sendWs);
                 registerRoute();
+#if IFRAPI_HAS_VARIABLE
+                Variable::init();
+#endif
                 ifr::logger::log("api", "Start API");
                 struct mg_mgr mgr{};
                 mg_mgr_init(&mgr);
@@ -405,9 +424,10 @@ namespace ifr {
         bool Variable::locked;
         ifr::Config::ConfigController Variable::cc;
 
-        void Variable::init() {
+
+        bool Variable::init() {
             std::unique_lock<decltype(mutex)> lock(mutex);
-            if (locked)throw std::exception("[API Variable] Repeat initialization");
+            if (locked)return false;
             static ifr::Config::ConfigInfo<void> info = {
                     [](void *a, auto &w) {
                         std::unique_lock<decltype(mutex)> lock(mutex);
@@ -426,23 +446,11 @@ namespace ifr {
             };
             cc = ifr::Config::createConfig<void>("variable", nullptr, info);
             cc.load();
-            locked = true;
+            return locked = true;
         }
 
         void Variable::save() { cc.save(); }
 
-        template<class T>
-        void Variable::registerVar(bool editable, const std::string &group, const std::string &prefix,
-                                   const std::string &type, const std::string &name, T *const data,
-                                   const std::string &def, const std::string &min, const std::string &max) {
-            auto key = group + " " + name;
-            std::unique_lock<decltype(mutex)> lock(mutex);
-            if (locked)
-                throw std::runtime_error("[API Variable] Unable to register: " + key + ", locked");
-            if (vars.count(key))
-                throw std::runtime_error("[API Variable] Variable with key " + key + " already exists");
-            vars.emplace(key, ifr::API::Variable(editable, group, prefix, type, name, data, def, min, max));
-        }
 
 #endif
     }
