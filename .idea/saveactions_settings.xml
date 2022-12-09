@@ -11,5 +11,10 @@
         <option value="rearrange" />
       </set>
     </option>
+    <option name="exclusions">
+      <set>
+        <option value=".github/workflows/.*" />
+      </set>
+    </option>
   </component>
 </project>

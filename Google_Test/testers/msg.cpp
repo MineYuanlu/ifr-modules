@@ -6,14 +6,12 @@
 #include <iostream>
 #include "msg/msg.hpp"
 #include "semaphore"
-#include <Windows.h>
 #include "logger/logger.hpp"
+#include "tools/tools.hpp"
 
 using namespace std;
 using namespace ifr::logger;
 
-#define SLEEP_TIME(t) (unsigned long) ((t) * 1000.0)//win下延时
-#define SLEEP(t) Sleep((t))//win下延时
 const auto delay = SLEEP_TIME(0.01);
 const auto msg_loop = 20;
 

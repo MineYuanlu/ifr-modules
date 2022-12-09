@@ -24,8 +24,7 @@ public:
     using vt_pair = std::pair<value_type, time_point>;
 private:
     struct vt_pair_greater {
-        _NODISCARD constexpr auto operator()(const vt_pair &Left, const vt_pair &Right) const
-        noexcept(noexcept(Left.second > Right.second)) -> decltype(Left.second > Right.second) {
+        constexpr auto operator()(const vt_pair &Left, const vt_pair &Right) const {
             return Left.second > Right.second;
         }
     } comp;
@@ -84,9 +83,9 @@ public:
         cv_.notify_all();
     }
 
-    _NODISCARD auto empty() const noexcept(noexcept(q_.empty())) /* strengthened */ { return q_.empty(); }
+    auto empty() const { return q_.empty(); }
 
-    _NODISCARD auto size() const noexcept(noexcept(q_.size())) /* strengthened */ { return q_.size(); }
+    auto size() const { return q_.size(); }
 
 
 };
