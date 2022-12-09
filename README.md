@@ -5,6 +5,7 @@
 本仓库用于构造视觉处理方面的通用模块, 目前模块:
 
 - api 调试接口
+- behavior 简单行为树模块
 - config 简单的配置文件管理器
 - data-waiter 数据等待器
 - delayqueue 延时队列
