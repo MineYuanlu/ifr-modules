@@ -232,7 +232,6 @@ namespace ifr {
                                 w.Key("vars"), w.StartArray();
                                 for (const auto &e: Variable::vars) {
                                     w.StartObject();
-                                    w.Key("editable"), w.Bool(e.second.editable_);
                                     w.Key("group"), w.String(e.second.group_);
                                     w.Key("type"), w.String(e.second.type_);
                                     w.Key("name"), w.String(e.second.name_);

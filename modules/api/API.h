@@ -196,8 +196,6 @@ namespace ifr {
             const std::function<void(std::string)> setValue;
             const std::function<std::string()> getValue;
 
-
-            const bool editable_; //是否可以编辑
             const std::string group_; //所属的组
             const std::string type_;//变量类型
             const std::string name_;//名称
@@ -212,8 +210,7 @@ namespace ifr {
             std::function<std::string()> summonGet(T *const data) { return [data]() { return toStr(*((T *) data)); }; }
 
             template<class T>
-            std::function<void(std::string)> summonSet(bool editable, T *const data) {
-                if (!editable)return [](auto) {};
+            std::function<void(std::string)> summonSet(T *const data) {
                 if (std::is_same<T, bool>::value) {
                     return [data](auto v) { *((T *) data) = v == "true"; };
                 } else if (std::is_same<T, int>::value) {
@@ -232,17 +229,17 @@ namespace ifr {
         public:
 
             template<class T>
-            Variable(bool editable, std::string group,
+            Variable(std::string group,
                      std::string type, std::string name, T *const data,
                      const T &def, const T &min, const T &max) :
-                    setValue(summonSet<T>(editable, data)), getValue(summonGet<T>(data)), editable_(editable),
+                    setValue(summonSet<T>(data)), getValue(summonGet<T>(data)),
                     group_(std::move(group)), type_(std::move(type)), name_(std::move(name)), data_((void *) data),
                     def_(toStr(def)), min_(toStr(min)), max_(toStr(max)) {
             }
 
 
-#define IFRAPI_VARIABLE(editable, group, name, min, max) \
-        ifr::API::Variable::registerVar<decltype(name)>(editable, #group, #name, &(name), min,max); \
+#define IFRAPI_VARIABLE(group, name, min, max) \
+        ifr::API::Variable::registerVar<decltype(name)>(#group, #name, &(name), min,max); \
 ///注册可前端调试变量: 是否可编辑, 所属组, 变量名, 最小值, 最大值
 
             /**
@@ -259,7 +256,7 @@ namespace ifr {
              * @param max 最大值
              */
             template<class T>
-            static void registerVar(bool editable, const std::string &group,
+            static void registerVar(const std::string &group,
                                     const std::string &name, T *const data, const T &min, const T &max) {
                 auto key = group + " " + name;
                 std::unique_lock<decltype(mutex)> lock(mutex);
@@ -268,8 +265,7 @@ namespace ifr {
                 if (vars.count(key))
                     throw std::runtime_error("[API Variable] Variable with key " + key + " already exists");
                 assert(*data >= min && *data <= max);
-                vars.emplace(key,
-                             ifr::API::Variable(editable, group, typeid(*data).name(), name, data, *data, min, max));
+                vars.emplace(key, ifr::API::Variable(group, typeid(*data).name(), name, data, *data, min, max));
             }
 
             /**保存所有变量*/
