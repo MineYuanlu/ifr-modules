@@ -113,6 +113,8 @@ namespace ifr {
             /**任务参数 (参数名-描述) */
             std::map<std::string, TaskArgDescription> args;
 
+            std::string extra;
+
 
             template<class T>
             void operator()(rapidjson::Writer<T> &jout) const {
@@ -131,6 +133,7 @@ namespace ifr {
                     for (const auto &e: args)jout.Key(e.first), e.second(jout);
                     jout.EndObject();
                 }
+                jout.Key("extra"), jout.String(extra);
                 jout.EndObject();
             }
 
@@ -143,6 +146,8 @@ namespace ifr {
                 for (auto &m: jin["io"].GetObj())t.io[m.name.GetString()] = TaskIODescription::read(m.value);
                 if (jin["args"].IsObject())
                     for (auto &m: jin["args"].GetObj())t.args[m.name.GetString()] = TaskArgDescription::read(m.value);
+                if (jin["extra"].IsString())
+                    t.extra = jin["extra"].GetString();
                 return t;
             }
 
