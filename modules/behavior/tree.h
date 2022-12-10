@@ -64,6 +64,11 @@ namespace BehaviorTree {
          */
         virtual bool run(stop_tester is_stop) { return false; }
 
+        /**
+         * 向行为树传递一个自定义数据
+         * @param data 数据
+         */
+        virtual void pushData(void *data) {}
     };
 
     class Root : public Node {
@@ -91,6 +96,8 @@ namespace BehaviorTree {
          * @return 运行是否成功
          */
         bool run() { return run([]() { return false; }); }
+
+        void pushData(void *data) override { node->pushData(data); }
     };
 
     class Sequence : public Node {
@@ -114,6 +121,8 @@ namespace BehaviorTree {
             });
         }
 
+        void pushData(void *data) override { for (const auto &node: nodes)node->pushData(data); }
+
         static void registerNode();
     };
 
@@ -135,6 +144,8 @@ namespace BehaviorTree {
         sp getNode() { return node; }
 
         bool run(stop_tester is_stop) override { return !node->run(is_stop); }
+
+        void pushData(void *data) override { node->pushData(data); }
 
         static void registerNode();
     };
@@ -161,6 +172,8 @@ namespace BehaviorTree {
             else { for (uint64_t i = 0; i < loop; i++) if (is_stop() || !node->run(is_stop))return false; }
             return true;
         }
+
+        void pushData(void *data) override { node->pushData(data); }
 
         static void registerNode();
     };

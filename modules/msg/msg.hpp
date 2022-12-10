@@ -84,7 +84,7 @@ namespace ifr {
         private:
             T &counter;
         public:
-            WaitingWatcher(T &c) : counter(c) { counter++; }
+            explicit WaitingWatcher(T &c) : counter(c) { counter++; }
 
             ~WaitingWatcher() { counter--; }
 
@@ -222,8 +222,9 @@ namespace ifr {
              * @throw MessageError_BadUse 未注册
              */
             bool hasSubscriber() {
-                if (!locked)
+                if (!locked) [[unlikely]] {
                     throw MessageError_BadUse(MODULE_MSG_PUB_OUTPUT_PREFIX "Channel \"" + name + "\" is not locked");
+                }
                 return !subs.empty();
             }
 
@@ -235,8 +236,9 @@ namespace ifr {
              */
             void push(const T &obj) {
                 std::unique_lock<std::recursive_mutex> lock(mtx);
-                if (!locked)
+                if (!locked) [[unlikely]] {
                     throw MessageError_BadUse(MODULE_MSG_PUB_OUTPUT_PREFIX "Channel \"" + name + "\" is not locked");
+                }
                 const auto size = subs.size();
                 if (size < 1 || breaked)return;
                 if (size == 1) {
@@ -333,7 +335,7 @@ namespace ifr {
               * @param _maxSize 订阅者的消息队列最大长度
               * @throw MessageError_BadUse 订阅器已经被绑定/名称为空
               */
-            void reg(const std::string &_name, size_t _maxSize) {
+            void reg(const std::string &_name, size_t _maxSize = 1) {
                 std::unique_lock<std::mutex> lock1(mtx);
                 if (!this->name.empty())
                     throw MessageError_BadUse(
@@ -372,11 +374,13 @@ namespace ifr {
              * @throw MessageError_BadUse 未注册
              */
             bool hasPublisher() {
-                if (!registered)
+                if (!registered) [[unlikely]] {
                     throw MessageError_BadUse(MODULE_MSG_SUB_OUTPUT_PREFIX "This subscriber is not registered yet");
+                }
                 return pub != nullptr;
             }
 
+        public:
             /**
              * @brief 尝试获取一条消息
              * @details 如果当前消息上没有发布器，则会抛出一条异常
@@ -387,13 +391,14 @@ namespace ifr {
             T pop() {
                 std::unique_lock<std::mutex> lock(mtx);
                 WaitingWatcher<std::atomic_int> ww(waiting);
-                if (!registered)
+                if (!registered) [[unlikely]] {
                     throw MessageError_BadUse(MODULE_MSG_SUB_OUTPUT_PREFIX "This subscriber is not registered yet");
-                else if (pub == nullptr)
+                } else if (pub == nullptr) [[unlikely]] {
                     throw MessageError_BadUse(
                             MODULE_MSG_SUB_OUTPUT_PREFIX "Channel \"" + name + "\" has no publisher!");
+                }
                 cv.wait(lock, [this]() { return breaked || !que.empty(); });
-                if (!que.empty()) {
+                if (!que.empty()) [[likely]] {
                     auto tmp = std::move(que.front());
                     que.pop();
                     return tmp;
@@ -412,16 +417,17 @@ namespace ifr {
             T pop_for(size_t ms) {
                 std::unique_lock<std::mutex> lock(mtx);
                 WaitingWatcher<std::atomic_int> ww(waiting);
-                if (!registered)
+                if (!registered) [[unlikely]] {
                     throw MessageError_BadUse(MODULE_MSG_SUB_OUTPUT_PREFIX "This subscriber is not registered yet");
-                else if (pub == nullptr)
+                } else if (pub == nullptr) [[unlikely]] {
                     throw MessageError_BadUse(
                             MODULE_MSG_SUB_OUTPUT_PREFIX "Channel \"" + name + "\" has no publisher!");
+                }
                 if (!cv.wait_for(lock, std::chrono::milliseconds(ms),
                                  [this]() { return breaked || !que.empty(); })) {
                     throw MessageError_NoMsg(MODULE_MSG_SUB_OUTPUT_PREFIX "Timeout");
                 }
-                if (!que.empty()) {
+                if (!que.empty()) [[likely]] {
                     auto tmp = std::move(que.front());
                     que.pop();
                     return tmp;
@@ -441,15 +447,16 @@ namespace ifr {
             T pop_until(P pt) {
                 std::unique_lock<std::mutex> lock(mtx);
                 WaitingWatcher<std::atomic_int> ww(waiting);
-                if (!registered)
+                if (!registered) [[unlikely]] {
                     throw MessageError_BadUse(MODULE_MSG_SUB_OUTPUT_PREFIX "This subscriber is not registered yet");
-                else if (pub == nullptr)
+                } else if (pub == nullptr) [[unlikely]] {
                     throw MessageError_BadUse(
                             MODULE_MSG_SUB_OUTPUT_PREFIX "Channel \"" + name + "\" has no publisher!");
+                }
                 if (!cv.wait_until(lock, pt, [this]() { return breaked || !que.empty(); })) {
                     throw MessageError_NoMsg(MODULE_MSG_SUB_OUTPUT_PREFIX "Timeout");
                 }
-                if (!que.empty()) {
+                if (!que.empty()) [[likely]] {
                     auto tmp = std::move(que.front());
                     que.pop();
                     return tmp;
