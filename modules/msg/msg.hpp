@@ -412,7 +412,8 @@ namespace ifr {
              * @param ms 超时时间，单位毫秒
              * @return 读取到的消息
              * @throw MessageError_BadUse 未注册 / 无发布者
-             * @throw MessageError_NoMsg 无数据(发布者被破坏 / 超时)
+             * @throw MessageError_NoMsg 无数据(超时)
+             * @throw MessageError_Broke 发布者被破坏
              */
             T pop_for(size_t ms) {
                 std::unique_lock<std::mutex> lock(mtx);
@@ -441,7 +442,8 @@ namespace ifr {
              * @param pt 超时时间点，为std::chrono::time_point类型
              * @return 读取到的消息
              * @throw MessageError_BadUse 未注册 / 无发布者
-             * @throw MessageError_NoMsg 无数据(发布者被破坏 / 超时)
+             * @throw MessageError_NoMsg 无数据(超时)
+             * @throw MessageError_Broke 发布者被破坏
              */
             template<class P>
             T pop_until(P pt) {
