@@ -30,6 +30,9 @@ namespace BehaviorTree {
         std::string description;
     };
 
+    using args_t = std::map<std::string, ArgDescription>;
+    using args_out = args_t &;
+
     /**代表节点*/
     class Node;
 
@@ -48,6 +51,9 @@ namespace BehaviorTree {
     /**条件节点*/
     class Condition;
 
+    /**选择节点*/
+    class Select;
+
     /**操作节点*/
     class Action;
 
@@ -56,6 +62,8 @@ namespace BehaviorTree {
         std::string name;
     public :
         explicit Node(std::string name) : name(std::move(name)) {}
+
+        explicit Node(json_in json) : name(json["name"].GetString()) {}
 
         /**
          * 单次运行
@@ -69,6 +77,10 @@ namespace BehaviorTree {
          * @param data 数据
          */
         virtual void pushData(void *data) {}
+
+        static void addArgs(args_out args) {
+            args["name"] = {BehaviorTree::ArgType::STR, "节点名称"};
+        }
     };
 
     class Root : public Node {
@@ -100,99 +112,11 @@ namespace BehaviorTree {
         void pushData(void *data) override { node->pushData(data); }
     };
 
-    class Sequence : public Node {
-    private:
-        using sp = std::shared_ptr<Node>;
-        std::vector<sp> nodes;//子节点序列
-    public:
-        explicit Sequence(const std::string &name) : Node(name) {}
-
-        Sequence(const std::string &name, std::vector<sp> nodes) : Node(name), nodes(std::move(nodes)) {}
-
-        void add(const std::shared_ptr<Node> &node) { nodes.push_back(node); }
-
-        void add(Node *const node) { nodes.emplace_back(node); }
-
-        const std::vector<sp> &getNodes() { return nodes; }
-
-        bool run(stop_tester is_stop) override {
-            return std::all_of(nodes.begin(), nodes.end(), [&is_stop](const auto &node) {
-                return !(is_stop()) && node->run(is_stop);
-            });
-        }
-
-        void pushData(void *data) override { for (const auto &node: nodes)node->pushData(data); }
-
-        static void registerNode();
-    };
-
-
-    /**取反节点*/
-    class DecoratorNot : public Node {
-    private:
-        using sp = std::shared_ptr<Node>;
-        sp node;//子节点
-    public:
-        explicit DecoratorNot(const std::string &name) : Node(name) {}
-
-        DecoratorNot(const std::string &name, sp node) : Node(name), node(std::move(node)) {}
-
-        void set(const sp &node_) { node = node_; }
-
-        void set(Node *const node_) { node = sp(node_); }
-
-        sp getNode() { return node; }
-
-        bool run(stop_tester is_stop) override { return !node->run(is_stop); }
-
-        void pushData(void *data) override { node->pushData(data); }
-
-        static void registerNode();
-    };
-
-    class DecoratorLoop : public Node {
-    private:
-        using sp = std::shared_ptr<Node>;
-        uint64_t loop;//循环次数
-        sp node;//子节点
-    public:
-        explicit DecoratorLoop(const std::string &name, uint64_t loop) : Node(name), loop(loop) {}
-
-        DecoratorLoop(const std::string &name, int loop, sp node) :
-                Node(name), loop(loop), node(std::move(node)) {}
-
-        void set(const sp &node_) { node = node_; }
-
-        void set(Node *const node_) { node = sp(node_); }
-
-        sp getNode() { return node; }
-
-        bool run(stop_tester is_stop) override {
-            if (loop <= 0) { while (true) if (is_stop() || !node->run(is_stop))return false; }
-            else { for (uint64_t i = 0; i < loop; i++) if (is_stop() || !node->run(is_stop))return false; }
-            return true;
-        }
-
-        void pushData(void *data) override { node->pushData(data); }
-
-        static void registerNode();
-    };
-
-    class Condition : public Node {
-    public:
-        explicit Condition(const std::string &name) : Node(name) {}
-    };
-
-    class Action : public Node {
-    public:
-        explicit Action(const std::string &name) : Node(name) {}
-    };
-
     /**
-     * 读取(反序列化)一个节点
-     * @param file 文件路径
-     * @return 根节点
-     */
+ * 读取(反序列化)一个节点
+ * @param file 文件路径
+ * @return 根节点
+ */
     std::shared_ptr<Root> readBehaviorTreeFile(const std::string &file);
 
     /**
@@ -224,14 +148,159 @@ namespace BehaviorTree {
      * @param args 节点参数列表
      * @param builder 节点构造器
      */
-    void registerNode(const std::string &name, const std::string &description,
-                      const std::map<std::string, ArgDescription> &args,
+    void registerNode(const std::string &name, const std::string &description, const args_t &args,
                       const std::function<std::shared_ptr<Node>(json_in)> &builder);
+
+    /**
+     * 注册一个节点
+     * @details 自动创建节点构造器, 但需节点拥有一个接受 json_in 的构造函数。
+     * @param name 节点名称
+     * @param description 节点描述
+     * @param args 节点参数列表
+     */
+    template<class T>
+    void registerNode(const std::string &name, const std::string &description) {
+        args_t args;
+        T::addArgs(args);
+        registerNode(name, description, args, [](json_in json) { return std::make_shared<T>(json); });
+    }
+
+#define BT_REGISTER(type, description) BehaviorTree::registerNode<type>(#type,description) //注册行为树节点
 
     /**
      * 获取所有节点的描述
      * @return 描述json
      */
     std::string getNodesDescription();
+
+    class Sequence : public Node {
+    private:
+        using sp = std::shared_ptr<Node>;
+        std::vector<sp> nodes;//子节点序列
+    public:
+        explicit Sequence(json_in json) : Node(json) {
+            for (const auto &node: json["nodes"].GetArray()) {
+                nodes.push_back(readBehaviorNode(node));
+            }
+        }
+
+        explicit Sequence(const std::string &name) : Node(name) {}
+
+        Sequence(const std::string &name, std::vector<sp> nodes) : Node(name), nodes(std::move(nodes)) {}
+
+        void add(const std::shared_ptr<Node> &node) { nodes.push_back(node); }
+
+        void add(Node *const node) { nodes.emplace_back(node); }
+
+        const std::vector<sp> &getNodes() { return nodes; }
+
+        bool run(stop_tester is_stop) override {
+            return std::all_of(nodes.begin(), nodes.end(), [&is_stop](const auto &node) {
+                return !(is_stop()) && node->run(is_stop);
+            });
+        }
+
+        void pushData(void *data) override { for (const auto &node: nodes)node->pushData(data); }
+
+
+        static void addArgs(args_out args) {
+            Node::addArgs(args);
+            args["nodes"] = {BehaviorTree::ArgType::NODE_LIST, "子节点序列"};
+        }
+    };
+
+
+    /**取反节点*/
+    class DecoratorNot : public Node {
+    private:
+        using sp = std::shared_ptr<Node>;
+        sp node;//子节点
+    public:
+        explicit DecoratorNot(json_in json) : Node(json), node(readBehaviorNode(json["node"])) {}
+
+        explicit DecoratorNot(const std::string &name) : Node(name) {}
+
+        DecoratorNot(const std::string &name, sp node) : Node(name), node(std::move(node)) {}
+
+        void set(const sp &node_) { node = node_; }
+
+        void set(Node *const node_) { node = sp(node_); }
+
+        sp getNode() { return node; }
+
+        bool run(stop_tester is_stop) override { return !node->run(is_stop); }
+
+        void pushData(void *data) override { node->pushData(data); }
+
+
+        static void addArgs(args_out args) {
+            Node::addArgs(args);
+            args["node"] = {BehaviorTree::ArgType::NODE, "子节点"};
+        }
+    };
+
+    class DecoratorLoop : public Node {
+    private:
+        using sp = std::shared_ptr<Node>;
+        uint64_t loop;//循环次数
+        sp node;//子节点
+    public:
+        explicit DecoratorLoop(json_in json) :
+                Node(json), loop(json["loop"].GetInt64()), node(readBehaviorNode(json["node"])) {}
+
+        explicit DecoratorLoop(const std::string &name, uint64_t loop) : Node(name), loop(loop) {}
+
+        DecoratorLoop(const std::string &name, int loop, sp node) :
+                Node(name), loop(loop), node(std::move(node)) {}
+
+        void set(const sp &node_) { node = node_; }
+
+        void set(Node *const node_) { node = sp(node_); }
+
+        sp getNode() { return node; }
+
+        bool run(stop_tester is_stop) override {
+            if (loop <= 0) { while (true) if (is_stop() || !node->run(is_stop))return false; }
+            else { for (uint64_t i = 0; i < loop; i++) if (is_stop() || !node->run(is_stop))return false; }
+            return true;
+        }
+
+        void pushData(void *data) override { node->pushData(data); }
+
+
+        static void addArgs(args_out args) {
+            Node::addArgs(args);
+            args["loop"] = {BehaviorTree::ArgType::NUMBER, "循环次数, 小于等于0为无限循环"};
+            args["node"] = {BehaviorTree::ArgType::NODE, "子节点"};
+        }
+    };
+
+    class Condition : public Node {
+    public:
+        explicit Condition(json_in json) : Node(json) {}
+
+        explicit Condition(const std::string &name) : Node(name) {}
+
+        static void addArgs(args_out args) { Node::addArgs(args); }
+    };
+
+    class Select : public Node {
+    public:
+        explicit Select(json_in json) : Node(json) {}
+
+        explicit Select(const std::string &name) : Node(name) {}
+
+        static void addArgs(args_out args) { Node::addArgs(args); }
+    };
+
+    class Action : public Node {
+    public:
+        explicit Action(json_in json) : Node(json) {}
+
+        explicit Action(const std::string &name) : Node(name) {}
+
+        static void addArgs(args_out args) { Node::addArgs(args); }
+    };
+
 }
 #endif //IFR_OPENCV_BEHAVIOR_TREE_H

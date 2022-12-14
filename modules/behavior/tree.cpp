@@ -19,13 +19,16 @@ namespace BehaviorTree {
 
     std::string node_description_cache;//节点描述json缓存
 
+
+
+
     void init() {
         static bool inited = false;
         if (inited)return;
         inited = true;
-        Sequence::registerNode();
-        DecoratorNot::registerNode();
-        DecoratorLoop::registerNode();
+        BT_REGISTER(Sequence, "序列节点, 顺序执行子节点");
+        BT_REGISTER(DecoratorNot, "取反节点, 对子节点的结果取反");
+        BT_REGISTER(DecoratorLoop, "循环节点, 循环执行子节点指定次数");
     }
 
     std::shared_ptr<Root> readBehaviorTreeFile(const std::string &file) {
@@ -51,6 +54,7 @@ namespace BehaviorTree {
     }
 
     std::shared_ptr<Node> readBehaviorNode(json_in json) {
+        if (json.IsNull())return nullptr;
         if (!json.IsObject())throw std::invalid_argument("[Behavior Tree]Can not parse Behavior Tree");
         const std::string type = json["type"].GetString();
         const auto args = json["args"].GetObj();
@@ -60,8 +64,7 @@ namespace BehaviorTree {
         return nodeBuilders[type].builder(args);
     }
 
-    void registerNode(const std::string &name, const std::string &description,
-                      const std::map<std::string, ArgDescription> &args,
+    void registerNode(const std::string &name, const std::string &description, const args_t &args,
                       const std::function<std::shared_ptr<Node>(json_in)> &builder) {
         rapidjson::StringBuffer sb;
         rapidjson::Writer<rapidjson::StringBuffer> w(sb);
@@ -102,36 +105,4 @@ namespace BehaviorTree {
         return node_description_cache;
     }
 
-    void Sequence::registerNode() {
-        std::map<std::string, BehaviorTree::ArgDescription> args;
-        args["name"] = {BehaviorTree::ArgType::STR, "节点名称"};
-        args["nodes"] = {BehaviorTree::ArgType::NODE_LIST, "子节点序列"};
-        BehaviorTree::registerNode("Sequence", "序列节点, 顺序执行子节点", args, [](json_in json) {
-            std::vector<sp> nodes_;
-            for (const auto &node: json["nodes"].GetArray()) {
-                nodes_.push_back(readBehaviorNode(node));
-            }
-            return std::make_shared<Sequence>(json["name"].GetString(), nodes_);
-        });
-    }
-
-    void DecoratorNot::registerNode() {
-        std::map<std::string, BehaviorTree::ArgDescription> args;
-        args["name"] = {BehaviorTree::ArgType::STR, "节点名称"};
-        args["node"] = {BehaviorTree::ArgType::NODE, "子节点"};
-        BehaviorTree::registerNode("DecoratorNot", "取反节点, 对子节点的结果取反", args, [](json_in json) {
-            return std::make_shared<DecoratorNot>(json["name"].GetString(), readBehaviorNode(json["node"]));
-        });
-    }
-
-    void DecoratorLoop::registerNode() {
-        std::map<std::string, BehaviorTree::ArgDescription> args;
-        args["name"] = {BehaviorTree::ArgType::STR, "节点名称"};
-        args["loop"] = {BehaviorTree::ArgType::NUMBER, "循环次数, 小于等于0为无限循环"};
-        args["node"] = {BehaviorTree::ArgType::NODE, "子节点"};
-        BehaviorTree::registerNode("DecoratorLoop", "循环节点, 循环执行子节点指定次数", args, [](json_in json) {
-            return std::make_shared<DecoratorLoop>(json["name"].GetString(), json["loop"].GetInt64(),
-                                                   readBehaviorNode(json["node"]));
-        });
-    }
 }

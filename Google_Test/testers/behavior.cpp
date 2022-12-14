@@ -14,6 +14,8 @@ private:
     const std::string speak;//输出内容
 
 public :
+    explicit ActionSpeak(BehaviorTree::json_in json) : BehaviorTree::Action(json), speak(json["speak"].GetString()) {}
+
     ActionSpeak(const std::string &name, std::string speak) : BehaviorTree::Action(name), speak(std::move(speak)) {}
 
     bool run(BehaviorTree::stop_tester is_stop) override {
@@ -26,12 +28,12 @@ public :
      * 注册此节点
      */
     static void registerNode() {
-        std::map<std::string, BehaviorTree::ArgDescription> args;
-        args["name"] = {BehaviorTree::ArgType::STR, "节点名称"};
+        BehaviorTree::registerNode<ActionSpeak>("speak", "打印节点, 向控制台说一句话");
+    }
+
+    static void addArgs(BehaviorTree::args_out args) {
+        Node::addArgs(args);
         args["speak"] = {BehaviorTree::ArgType::STR, "显示内容"};
-        BehaviorTree::registerNode("speak", "打印节点, 向控制台说一句话", args, [](BehaviorTree::json_in json) {
-            return std::make_shared<ActionSpeak>(json["name"].GetString(), json["speak"].GetString());
-        });
     }
 };
 
