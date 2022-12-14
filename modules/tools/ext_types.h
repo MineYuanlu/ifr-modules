@@ -34,7 +34,7 @@ typedef void (__cdecl *sighandler_t)(int);
 typedef _Bool bit;
 typedef uint8_t octet_t;
 
-#define SUCCESS          0
+#define SUCCESS_CODE     0
 #define ERR_NO_SUCH_POS -1
 
 //In case one day we have to remove the 'FORCE_INLINE' declaration we use 'EXPORT_C'
@@ -49,12 +49,12 @@ FORCE_INLINE int modify_octet(octet_t *dst, uint8_t pos, bit value) {
     else
         *dst &= ~(1 << pos);
     //else *dst = (((*dst) & (0xff - (1 << pos))) | (value << pos));
-    return SUCCESS;
+    return SUCCESS_CODE;
 }
 
 FORCE_INLINE int assign_octet(octet_t *dst, octet_t src) {
     *dst = src;
-    return SUCCESS;
+    return SUCCESS_CODE;
 }
 
 FORCE_INLINE int get_bit_octet(octet_t src, uint8_t pos, bit *value) {
@@ -62,14 +62,14 @@ FORCE_INLINE int get_bit_octet(octet_t src, uint8_t pos, bit *value) {
         return ERR_NO_SUCH_POS;
     else
         *value = (!!(src & (1 << pos)));
-    return SUCCESS;
+    return SUCCESS_CODE;
 }
 
 FORCE_INLINE int reverse_octet(octet_t *dst) {
     *dst = ((((*dst) & 0x01) << 7) | (((*dst) & 0x02) << 5) | (((*dst) & 0x04) << 3) |
             (((*dst) & 0x08) << 1) | (((*dst) & 0x10) >> 1) | (((*dst) & 0x20) >> 3) |
             (((*dst) & 0x40) >> 5) | (((*dst) & 0x80) >> 7));
-    return SUCCESS;
+    return SUCCESS_CODE;
 }
 
 int reverse_octets_bits(octet_t *dst, size_t size);

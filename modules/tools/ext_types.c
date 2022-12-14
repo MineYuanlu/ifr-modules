@@ -9,12 +9,12 @@ int put_octet(octet_t src) {
           (!!(src & 0x20)) + '0', (!!(src & 0x10)) + '0',
           (!!(src & 0x08)) + '0', (!!(src & 0x04)) + '0',
           (!!(src & 0x02)) + '0', (!!(src & 0x01)) + '0');
-    return SUCCESS;
+    return SUCCESS_CODE;
 }
 
 int put_octets(octet_t *src, size_t size, char sep) {
     if (UNLIKELY(size == 0))
-        return SUCCESS;
+        return SUCCESS_CODE;
     else {
         size_t i = 0;
         --size;
@@ -24,7 +24,7 @@ int put_octets(octet_t *src, size_t size, char sep) {
         }
         put_octet(*(src + size));
     }
-    return SUCCESS;
+    return SUCCESS_CODE;
 }
 
 int reverse_octets_bits(octet_t *dst, size_t size) {
@@ -39,7 +39,7 @@ int reverse_octets_bits(octet_t *dst, size_t size) {
     }
     if (size & 1)
         reverse_octet(dst + (size >> 1));
-    return SUCCESS;
+    return SUCCESS_CODE;
 }
 
 int reverse_octets(octet_t *dst, size_t size) {
@@ -50,7 +50,7 @@ int reverse_octets(octet_t *dst, size_t size) {
         *(dst + i) = *(dst + size - i - 1);
         *(dst + size - i - 1) = temp;
     }
-    return SUCCESS;
+    return SUCCESS_CODE;
 }
 
 __EXPORT_C_END
